@@ -1,16 +1,11 @@
 package com.dfms.dairy_farm_management_system.helpers;
 
 import com.dfms.dairy_farm_management_system.Main;
-import com.dfms.dairy_farm_management_system.connection.DBConfig;
-import com.dfms.dairy_farm_management_system.models.Employee;
 import com.dfms.dairy_farm_management_system.models.Routine;
 import org.apache.commons.lang3.StringUtils;
-import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableDoubleValue;
 import javafx.beans.value.ObservableValue;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import javafx.fxml.FXMLLoader;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
@@ -20,8 +15,6 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
-import javafx.util.Callback;
-import org.w3c.dom.Text;
 
 import java.io.IOException;
 import java.math.BigInteger;
@@ -32,14 +25,22 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
-import java.util.Objects;
 import java.util.function.DoubleConsumer;
 
-import static com.dfms.dairy_farm_management_system.connection.DBConfig.disconnect;
 import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConnection;
 
 public class Helper {
     public static final String DEFAULT_PASSWORD = "Pass123";
+    public static final String TITLE_ERROR = "Error";
+    public static final String TITLE_SUCCESS = "Success";
+    private static final String EMAIL_REGEX =
+            "^(?=.{1,64}@)[\\p{L}0-9_-]+(\\.[\\p{L}0-9_-]+)*@" +
+                    "[^-][\\p{L}0-9-]+(\\.[\\p{L}0-9-]+)*(\\.[\\p{L}]{2,})$";
+
+    private static final String STYLE_ERROR = "-fx-border-color: red";
+    private static final String STYLE_OK = "-fx-border-color: transparent";
+
+
 
     public static void centerScreen(Stage stage) {
         Screen screen = Screen.getPrimary();
@@ -70,7 +71,7 @@ public class Helper {
         FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource(url));
         Scene scene = new Scene(fxmlLoader.load());
         Stage stage = new Stage();
-        // stage.initStyle(StageStyle.TRANSPARENT);
+
         stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
         stage.setTitle(title);
         stage.setResizable(false);
@@ -91,110 +92,92 @@ public class Helper {
 
     //validate inputs to accept only numbers
     public static void validateNumericInput(TextField textField) {
-        // force the field to be numeric only
-        textField.textProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue,
-                                String newValue) {
-                if (!newValue.matches("\\d*")) {
-                    textField.setText(newValue.replaceAll("\\D", ""));
+        textField.textProperty().addListener(
+                (ObservableValue<? extends String> obs, String oldValue, String newValue) -> {
+                    if (!newValue.matches("\\d*")) {
+                        textField.setText(newValue.replaceAll("\\D", ""));
+                    }
                 }
-            }
-        });
+        );
     }
+
 
     //validate inputs to accept only decimal numbers and one dot
     public static void validateDecimalInput(TextField textField) {
-        // force the field to be numeric only
-        textField.textProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue,
-                                String newValue) {
-                //accept only numbers and only one dot
-                if (!newValue.matches("\\d*\\.?\\d*")) {
-                    textField.setText(newValue.replaceAll("[^\\d.]", ""));
+        textField.textProperty().addListener(
+                (ObservableValue<? extends String> obs, String oldValue, String newValue) -> {
+                    if (!newValue.matches("\\d*\\.?\\d*")) {
+                        textField.setText(newValue.replaceAll("[^\\d.]", ""));
+                    }
                 }
-            }
-        });
+        );
     }
+
 
     //validate inputs to accept only + and numbers
     public static void validatePhoneInput(TextField textField) {
-        // force the field to be numeric only
-        textField.textProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue,
-                                String newValue) {
-                //accept only phone numbers format
-                if (!newValue.matches("\\+?\\d*")) {
-                    textField.setText(newValue.replaceAll("[^\\d+]", ""));
+        textField.textProperty().addListener(
+                (ObservableValue<? extends String> obs, String oldValue, String newValue) -> {
+                    if (!newValue.matches("\\+?\\d*")) {
+                        textField.setText(newValue.replaceAll("[^\\d+]", ""));
+                    }
                 }
-            }
-        });
+        );
     }
 
+
     public static void setErrorOnInput(TextField textField, String error) {
-        textField.getStyleClass().add("error");
+        textField.getStyleClass().add(TITLE_ERROR);
         textField.setTooltip(new Tooltip(error));
     }
 
     public static void setErrorOnInput(DatePicker datePicker, String error) {
-        datePicker.getStyleClass().add("error");
+        datePicker.getStyleClass().add(TITLE_ERROR);
         datePicker.setTooltip(new Tooltip(error));
     }
 
-    public static void setErrorOnInput(ComboBox comboBox, String error) {
-        comboBox.getStyleClass().add("error");
+    public static void setErrorOnInput(ComboBox<?> comboBox, String error) {
+        comboBox.getStyleClass().add(TITLE_ERROR);
         comboBox.setTooltip(new Tooltip(error));
     }
 
     public static void removeErrorOnInput(TextField textField) {
-        textField.getStyleClass().remove("error");
+        textField.getStyleClass().remove(TITLE_ERROR);
         textField.setTooltip(null);
     }
 
     public static void removeErrorOnInput(DatePicker datePicker) {
-        datePicker.getStyleClass().remove("error");
+        datePicker.getStyleClass().remove(TITLE_ERROR);
         datePicker.setTooltip(null);
     }
 
-    public static void removeErrorOnInput(ComboBox comboBox) {
-        comboBox.getStyleClass().remove("error");
+    public static void removeErrorOnInput(ComboBox<?> comboBox) {
+        comboBox.getStyleClass().remove(TITLE_ERROR);
         comboBox.setTooltip(null);
     }
 
+
     //validate email input
     public static void validateEmailInput(TextField textField) {
-        // email should be a valid email otherwise error
-        textField.textProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue,
-                                String newValue) {
-                if (!newValue.matches("^(?=.{1,64}@)[\\p{L}0-9_-]+(\\.[\\p{L}0-9_-]+)*@"
-                        + "[^-][\\p{L}0-9-]+(\\.[\\p{L}0-9-]+)*(\\.[\\p{L}]{2,})$")) {
-                    textField.setStyle("-fx-border-color: red");
-                } else {
-                    textField.setStyle("-fx-border-color: transparent");
+        textField.textProperty().addListener(
+                (ObservableValue<? extends String> obs, String oldValue, String newValue) -> {
+                    boolean valid = newValue.matches(EMAIL_REGEX);
+                    textField.setStyle(valid ? STYLE_OK : STYLE_ERROR);
                 }
-            }
-        });
+        );
     }
+
 
     //validate password input
     public static void validatePasswordInput(TextField textField) {
-        //password must be at least 8 characters long
-        textField.textProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue<? extends String> observable, String oldValue,
-                                String newValue) {
-                if (newValue.length() < 8) {
-                    textField.setStyle("-fx-border-color: red");
-                } else {
-                    textField.setStyle("-fx-border-color: transparent");
+        textField.textProperty().addListener(
+                (ObservableValue<? extends String> obs, String oldValue, String newValue) -> {
+                    boolean valid = newValue.length() >= 8;
+                    textField.setStyle(valid ? STYLE_OK : STYLE_ERROR);
                 }
-            }
-        });
+        );
     }
+
 
     //display alert message
     public static void displayAlert(String title, String message, Alert.AlertType type) {
@@ -207,20 +190,24 @@ public class Helper {
 
     public static HashMap<String, Integer> getRoles() {
         HashMap<String, Integer> rolesList = new HashMap<>();
-        Statement statement = null;
-        try {
-            statement = getConnection().createStatement();
-            ResultSet rs = statement.executeQuery("SELECT * FROM `roles`");
+
+        String sql = "SELECT id, name FROM roles";
+
+        try (Connection con = getConnection();
+             Statement st = con.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+
             while (rs.next()) {
                 rolesList.put(rs.getString("name"), rs.getInt("id"));
             }
+
         } catch (SQLException e) {
-            displayAlert("Error", "Error while getting roles", Alert.AlertType.ERROR);
-        } finally {
-            disconnect();
+            displayAlert(TITLE_ERROR, "Error while getting roles", Alert.AlertType.ERROR);
         }
+
         return rolesList;
     }
+
 
     public static String encryptPassword(String password) {
         String generatedPassword = null;
@@ -229,7 +216,7 @@ public class Helper {
         try {
             md = MessageDigest.getInstance("MD5");
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException("MD5 algorithm not available", e);
         }
 
         md.update(password.getBytes(), 0, password.length());
