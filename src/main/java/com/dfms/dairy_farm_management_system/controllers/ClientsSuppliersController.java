@@ -47,21 +47,24 @@ import java.net.URL;
 import java.sql.*;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
 public class ClientsSuppliersController implements Initializable {
 
+    private static final Logger LOGGER = Logger.getLogger(ClientsSuppliersController.class.getName());
+
     private static final String APP_ICON_PATH = "file:src/main/resources/images/logo.png";
-    private static final String ICON_STYLE = "-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;";
     private static final String ERROR_TITLE = "Error";
+    private static final String ICON_STYLE = "-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;";
 
-    private static final String CLIENTS_QUERY = "SELECT * FROM clients";
-    private static final String SUPPLIERS_QUERY = "SELECT * FROM suppliers";
+    private static final ObservableList<String> EXPORT_OPTIONS =
+            FXCollections.observableArrayList("PDF", "Excel");
 
-    private final ObservableList<String> exportFormats = FXCollections.observableArrayList("PDF", "Excel");
-
-    // -------------------- CLIENT TABLE --------------------
+    // ========================= CLIENT UI =========================
     @FXML private TableView<Client> TableClient;
     @FXML private TableColumn<Client, Integer> colidClient;
     @FXML private TableColumn<Client, String> colnameClient;
@@ -69,10 +72,11 @@ public class ClientsSuppliersController implements Initializable {
     @FXML private TableColumn<Client, String> colemailClient;
     @FXML private TableColumn<Client, String> colphoneClient;
     @FXML private TableColumn<Client, String> actionClient;
+
     @FXML private ComboBox<String> export_combo;
     @FXML private TextField search_input_client;
 
-    // -------------------- SUPPLIER TABLE --------------------
+    // ========================= SUPPLIER UI =========================
     @FXML private TableView<Supplier> TableSupplier;
     @FXML private TableColumn<Supplier, Integer> colidSupplier;
     @FXML private TableColumn<Supplier, String> colnameSupplier;
@@ -80,29 +84,46 @@ public class ClientsSuppliersController implements Initializable {
     @FXML private TableColumn<Supplier, String> colemailSupplier;
     @FXML private TableColumn<Supplier, String> colphoneSupplier;
     @FXML private TableColumn<Supplier, String> colactionSupplier;
+
     @FXML private ComboBox<String> export_combo_sup;
     @FXML private TextField search_input_supplier;
 
+    // Backing lists (kept fresh)
     private final ObservableList<Client> listClient = FXCollections.observableArrayList();
     private final ObservableList<Supplier> listSupplier = FXCollections.observableArrayList();
 
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
-        export_combo.setItems(exportFormats);
-        export_combo_sup.setItems(exportFormats);
+        export_combo.setItems(EXPORT_OPTIONS);
+        export_combo_sup.setItems(EXPORT_OPTIONS);
 
-        configureClientTable();
-        configureSupplierTable();
+        setupClientTableColumns();
+        setupSupplierTableColumns();
 
-        refreshClients();
-        refreshSuppliers();
+        refreshTableClient();
+        refreshTableSupplier();
 
-        wireExport(export_combo, "Clients", "Clients List", CLIENTS_QUERY);
-        wireExport(export_combo_sup, "Suppliers", "Suppliers List", SUPPLIERS_QUERY);
+        // Export listeners
+        export_combo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null) return;
+            String query = "SELECT * FROM `clients`";
+            if ("PDF".equals(newVal)) exportToPDF("Clients List", query);
+            else exportToExcel("Clients", query, "Clients List");
+        });
+
+        export_combo_sup.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null) return;
+            String query = "SELECT * FROM `suppliers`";
+            if ("PDF".equals(newVal)) exportToPDF("Suppliers List", query);
+            else exportToExcel("Suppliers", query, "Suppliers List");
+        });
+
+        // Live search hooks (no duplication)
+        setupLiveSearch(search_input_client, TableClient, listClient, Client::getName);
+        setupLiveSearch(search_input_supplier, TableSupplier, listSupplier, Supplier::getNameSupplier);
     }
 
     // ========================= OPEN POPUPS =========================
-
     @FXML
     void openAddClient(MouseEvent event) throws IOException {
         openNewWindow("Add client", "add_new_client");
@@ -113,25 +134,33 @@ public class ClientsSuppliersController implements Initializable {
         openNewWindow("Add supplier", "add_new_supplier");
     }
 
-    // ========================= LOAD / REFRESH =========================
+    // ========================= CLIENTS =========================
+    private void setupClientTableColumns() {
+        colidClient.setCellValueFactory(new PropertyValueFactory<>("id"));
+        colnameClient.setCellValueFactory(new PropertyValueFactory<>("name"));
+        coltypeClient.setCellValueFactory(new PropertyValueFactory<>("type"));
+        colemailClient.setCellValueFactory(new PropertyValueFactory<>("email"));
+        colphoneClient.setCellValueFactory(new PropertyValueFactory<>("phone"));
 
-    private void refreshClients() {
-        listClient.clear();
-        listClient.addAll(fetchClients());
+        actionClient.setCellFactory(createActionCellFactoryForClients());
+    }
+
+    public void refreshTableClient() {
+        listClient.setAll(fetchClients());
         TableClient.setItems(listClient);
     }
 
-    private void refreshSuppliers() {
-        listSupplier.clear();
-        listSupplier.addAll(fetchSuppliers());
-        TableSupplier.setItems(listSupplier);
+    @FXML
+    public void refreshTable(MouseEvent mouseEvent) {
+        refreshTableClient();
     }
 
-    public ObservableList<Client> fetchClients() {
+    private ObservableList<Client> fetchClients() {
         ObservableList<Client> out = FXCollections.observableArrayList();
+        String selectQuery = "SELECT * FROM `clients`";
 
         try (Connection connection = DBConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(CLIENTS_QUERY);
+             PreparedStatement statement = connection.prepareStatement(selectQuery);
              ResultSet resultSet = statement.executeQuery()) {
 
             while (resultSet.next()) {
@@ -147,17 +176,119 @@ public class ClientsSuppliersController implements Initializable {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logAndAlert("Failed to load clients", e);
         }
 
         return out;
     }
 
-    public ObservableList<Supplier> fetchSuppliers() {
+    private Callback<TableColumn<Client, String>, TableCell<Client, String>> createActionCellFactoryForClients() {
+        return (TableColumn<Client, String> param) -> new TableCell<>() {
+            private final Image imgEdit = loadIcon("/images/edit.png");
+            private final Image imgDelete = loadIcon("/images/delete.png");
+            private final Image imgView = loadIcon("/images/eye.png");
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                    setText(null);
+                    return;
+                }
+
+                ImageView ivEdit = iconView(imgEdit);
+                ImageView ivDelete = iconView(imgDelete);
+                ImageView ivView = iconView(imgView);
+
+                HBox manage = buildActionBox(ivEdit, ivDelete, ivView);
+
+                ivDelete.setOnMouseClicked(e -> {
+                    Client client = getCurrentRowItem(TableClient);
+                    if (client == null) return;
+
+                    if (confirmDelete("Delete Confirmation", "Are you sure you want to delete this client?")) {
+                        client.delete();
+                        refreshTableClient();
+                        info("Delete Client", "Client deleted successfully");
+                    }
+                });
+
+                ivView.setOnMouseClicked(e -> {
+                    Client client = getCurrentRowItem(TableClient);
+                    if (client == null) return;
+                    openClientDetails(client);
+                });
+
+                ivEdit.setOnMouseClicked(e -> {
+                    Client client = getCurrentRowItem(TableClient);
+                    if (client == null) return;
+                    openEditClient(client);
+                });
+
+                setGraphic(manage);
+                setText(null);
+            }
+        };
+    }
+
+    private void openClientDetails(Client client) {
+        try {
+            FXMLLoader loader = new FXMLLoader(Main.class.getResource(
+                    "/com/dfms/dairy_farm_management_system/popups/client_details.fxml"));
+            Scene scene = new Scene(loader.load());
+            ClientDetailsController controller = loader.getController();
+            controller.fetchClient(client);
+
+            showStage("Client Details", scene);
+        } catch (IOException e) {
+            logAndAlert("Failed to open client details", e);
+        }
+    }
+
+    private void openEditClient(Client client) {
+        try {
+            FXMLLoader loader = new FXMLLoader(Main.class.getResource(
+                    "/com/dfms/dairy_farm_management_system/popups/add_new_client.fxml"));
+            Scene scene = new Scene(loader.load());
+
+            NewClientController controller = loader.getController();
+            controller.setUpdate(true);
+            controller.fetchClient(client.getId(), client.getName(), client.getEmail(), client.getPhone(), client.getType());
+
+            showStage("Update Client", scene);
+        } catch (IOException e) {
+            logAndAlert("Failed to open edit client", e);
+        }
+    }
+
+    // ========================= SUPPLIERS =========================
+    private void setupSupplierTableColumns() {
+        colidSupplier.setCellValueFactory(new PropertyValueFactory<>("id"));
+        colnameSupplier.setCellValueFactory(new PropertyValueFactory<>("nameSupplier"));
+        coltypeSupplier.setCellValueFactory(new PropertyValueFactory<>("typeSupplier"));
+        colemailSupplier.setCellValueFactory(new PropertyValueFactory<>("emailSupplier"));
+        colphoneSupplier.setCellValueFactory(new PropertyValueFactory<>("phoneSupplier"));
+
+        colactionSupplier.setCellFactory(createActionCellFactoryForSuppliers());
+    }
+
+    private void refreshTableSupplier() {
+        listSupplier.setAll(fetchSuppliers());
+        TableSupplier.setItems(listSupplier);
+    }
+
+    @FXML
+    void refreshTableSupplier(MouseEvent event) {
+        refreshTableSupplier();
+    }
+
+    private ObservableList<Supplier> fetchSuppliers() {
         ObservableList<Supplier> out = FXCollections.observableArrayList();
+        String selectQuery = "SELECT * FROM `suppliers`";
 
         try (Connection connection = DBConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(SUPPLIERS_QUERY);
+             PreparedStatement statement = connection.prepareStatement(selectQuery);
              ResultSet resultSet = statement.executeQuery()) {
 
             while (resultSet.next()) {
@@ -173,49 +304,17 @@ public class ClientsSuppliersController implements Initializable {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logAndAlert("Failed to load suppliers", e);
         }
 
         return out;
     }
 
-    // Buttons used by UI
-    public void refreshTableClient() { refreshClients(); }
-    void refreshTableSupplier() { refreshSuppliers(); }
-
-    @FXML
-    public void refreshTable(MouseEvent mouseEvent) { refreshClients(); }
-
-    @FXML
-    void refreshTableSupplier(MouseEvent event) { refreshSuppliers(); }
-
-    // ========================= TABLE CONFIG =========================
-
-    private void configureClientTable() {
-        colidClient.setCellValueFactory(new PropertyValueFactory<>("id"));
-        colnameClient.setCellValueFactory(new PropertyValueFactory<>("name"));
-        coltypeClient.setCellValueFactory(new PropertyValueFactory<>("type"));
-        colemailClient.setCellValueFactory(new PropertyValueFactory<>("email"));
-        colphoneClient.setCellValueFactory(new PropertyValueFactory<>("phone"));
-
-        actionClient.setCellFactory(createClientActionCellFactory());
-    }
-
-    private void configureSupplierTable() {
-        colidSupplier.setCellValueFactory(new PropertyValueFactory<>("id"));
-        colnameSupplier.setCellValueFactory(new PropertyValueFactory<>("nameSupplier"));
-        coltypeSupplier.setCellValueFactory(new PropertyValueFactory<>("typeSupplier"));
-        colemailSupplier.setCellValueFactory(new PropertyValueFactory<>("emailSupplier"));
-        colphoneSupplier.setCellValueFactory(new PropertyValueFactory<>("phoneSupplier"));
-
-        colactionSupplier.setCellFactory(createSupplierActionCellFactory());
-    }
-
-    private Callback<TableColumn<Client, String>, TableCell<Client, String>> createClientActionCellFactory() {
-        return param -> new TableCell<>() {
-            private final Image imgEdit = new Image(getClass().getResourceAsStream("/images/edit.png"));
-            private final Image imgDelete = new Image(getClass().getResourceAsStream("/images/delete.png"));
-            private final Image imgView = new Image(getClass().getResourceAsStream("/images/eye.png"));
+    private Callback<TableColumn<Supplier, String>, TableCell<Supplier, String>> createActionCellFactoryForSuppliers() {
+        return (TableColumn<Supplier, String> param) -> new TableCell<>() {
+            private final Image imgEdit = loadIcon("/images/edit.png");
+            private final Image imgDelete = loadIcon("/images/delete.png");
+            private final Image imgView = loadIcon("/images/eye.png");
 
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -226,82 +325,32 @@ public class ClientsSuppliersController implements Initializable {
                     return;
                 }
 
-                ImageView ivEdit = styledIcon(imgEdit);
-                ImageView ivDelete = styledIcon(imgDelete);
-                ImageView ivView = styledIcon(imgView);
+                ImageView ivEdit = iconView(imgEdit);
+                ImageView ivDelete = iconView(imgDelete);
+                ImageView ivView = iconView(imgView);
 
-                HBox manage = new HBox(ivEdit, ivDelete, ivView);
-                manage.setStyle("-fx-alignment:center");
-                HBox.setMargin(ivEdit, new Insets(1, 1, 0, 3));
-                HBox.setMargin(ivDelete, new Insets(1, 1, 0, 3));
-                HBox.setMargin(ivView, new Insets(1, 1, 0, 3));
+                HBox manage = buildActionBox(ivEdit, ivDelete, ivView);
 
                 ivDelete.setOnMouseClicked(e -> {
-                    Client client = getTableView().getItems().get(getIndex());
-                    if (confirmDelete("Delete Confirmation", "Are you sure you want to delete this client?")) {
-                        client.delete();
-                        refreshClients();
-                        info("Delete Client", "Client deleted successfully");
-                    }
-                });
+                    Supplier supplier = getCurrentRowItem(TableSupplier);
+                    if (supplier == null) return;
 
-                ivView.setOnMouseClicked(e -> {
-                    Client client = getTableView().getItems().get(getIndex());
-                    openClientDetails(client);
-                });
-
-                ivEdit.setOnMouseClicked(e -> {
-                    Client client = getTableView().getItems().get(getIndex());
-                    openEditClient(client);
-                });
-
-                setGraphic(manage);
-                setText(null);
-            }
-        };
-    }
-
-    private Callback<TableColumn<Supplier, String>, TableCell<Supplier, String>> createSupplierActionCellFactory() {
-        return param -> new TableCell<>() {
-            private final Image imgEdit = new Image(getClass().getResourceAsStream("/images/edit.png"));
-            private final Image imgDelete = new Image(getClass().getResourceAsStream("/images/delete.png"));
-            private final Image imgView = new Image(getClass().getResourceAsStream("/images/eye.png"));
-
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty) {
-                    setGraphic(null);
-                    setText(null);
-                    return;
-                }
-
-                ImageView ivEdit = styledIcon(imgEdit);
-                ImageView ivDelete = styledIcon(imgDelete);
-                ImageView ivView = styledIcon(imgView);
-
-                HBox manage = new HBox(ivEdit, ivDelete, ivView);
-                manage.setStyle("-fx-alignment:center");
-                HBox.setMargin(ivEdit, new Insets(1, 1, 0, 3));
-                HBox.setMargin(ivDelete, new Insets(1, 1, 0, 3));
-                HBox.setMargin(ivView, new Insets(1, 1, 0, 3));
-
-                ivDelete.setOnMouseClicked(e -> {
-                    Supplier supplier = getTableView().getItems().get(getIndex());
                     if (confirmDelete("Delete Confirmation", "Are you sure you want to delete this supplier?")) {
                         supplier.delete();
-                        refreshSuppliers();
+                        refreshTableSupplier();
                         info("Delete Supplier", "Supplier deleted successfully");
                     }
                 });
 
                 ivView.setOnMouseClicked(e -> {
-                    Supplier supplier = getTableView().getItems().get(getIndex());
+                    Supplier supplier = getCurrentRowItem(TableSupplier);
+                    if (supplier == null) return;
                     openSupplierDetails(supplier);
                 });
 
                 ivEdit.setOnMouseClicked(e -> {
-                    Supplier supplier = getTableView().getItems().get(getIndex());
+                    Supplier supplier = getCurrentRowItem(TableSupplier);
+                    if (supplier == null) return;
                     openEditSupplier(supplier);
                 });
 
@@ -309,51 +358,6 @@ public class ClientsSuppliersController implements Initializable {
                 setText(null);
             }
         };
-    }
-
-    private ImageView styledIcon(Image img) {
-        ImageView iv = new ImageView(img);
-        iv.setStyle(ICON_STYLE);
-        iv.setPreserveRatio(true);
-        iv.setSmooth(true);
-        iv.setCache(true);
-        return iv;
-    }
-
-    private boolean confirmDelete(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle(title);
-        alert.setHeaderText(message);
-        Optional<ButtonType> result = alert.showAndWait();
-        return result.isPresent() && result.get() == ButtonType.OK;
-    }
-
-    private void info(String title, String message) {
-        Alert a = new Alert(Alert.AlertType.INFORMATION);
-        a.setTitle(title);
-        a.setHeaderText(message);
-        a.showAndWait();
-    }
-
-    private void openClientDetails(Client client) {
-        try {
-            FXMLLoader loader = new FXMLLoader(Main.class.getResource(
-                    "/com/dfms/dairy_farm_management_system/popups/client_details.fxml"));
-            Scene scene = new Scene(loader.load());
-            ClientDetailsController controller = loader.getController();
-            controller.fetchClient(client);
-
-            Stage stage = new Stage();
-            stage.getIcons().add(new Image(APP_ICON_PATH));
-            stage.setTitle("Client Details");
-            stage.setResizable(false);
-            stage.setScene(scene);
-            centerScreen(stage);
-            stage.show();
-        } catch (IOException e) {
-            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-            e.printStackTrace();
-        }
     }
 
     private void openSupplierDetails(Supplier supplier) {
@@ -364,39 +368,9 @@ public class ClientsSuppliersController implements Initializable {
             SupplierDetailsController controller = loader.getController();
             controller.fetchSupplier(supplier);
 
-            Stage stage = new Stage();
-            stage.getIcons().add(new Image(APP_ICON_PATH));
-            stage.setTitle("Supplier Details");
-            stage.setResizable(false);
-            stage.setScene(scene);
-            centerScreen(stage);
-            stage.show();
+            showStage("Supplier Details", scene);
         } catch (IOException e) {
-            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-            e.printStackTrace();
-        }
-    }
-
-    private void openEditClient(Client client) {
-        try {
-            FXMLLoader loader = new FXMLLoader(Main.class.getResource(
-                    "/com/dfms/dairy_farm_management_system/popups/add_new_client.fxml"));
-            Scene scene = new Scene(loader.load());
-
-            NewClientController controller = loader.getController();
-            controller.setUpdate(true);
-            controller.fetchClient(client.getId(), client.getName(), client.getEmail(), client.getPhone(), client.getType());
-
-            Stage stage = new Stage();
-            stage.getIcons().add(new Image(APP_ICON_PATH));
-            stage.setTitle("Update Client");
-            stage.setResizable(false);
-            stage.setScene(scene);
-            centerScreen(stage);
-            stage.show();
-        } catch (IOException e) {
-            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-            e.printStackTrace();
+            logAndAlert("Failed to open supplier details", e);
         }
     }
 
@@ -410,68 +384,50 @@ public class ClientsSuppliersController implements Initializable {
             controller.setUpdate(true);
             controller.fetchSupplier(supplier);
 
-            Stage stage = new Stage();
-            stage.getIcons().add(new Image(APP_ICON_PATH));
-            stage.setTitle("Update Supplier");
-            stage.setResizable(false);
-            stage.setScene(scene);
-            centerScreen(stage);
-            stage.show();
+            showStage("Update Supplier", scene);
         } catch (IOException e) {
-            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-            e.printStackTrace();
+            logAndAlert("Failed to open edit supplier", e);
         }
     }
 
-    // ========================= LIVE SEARCH =========================
+    // ========================= SEARCH (GENERIC) =========================
+    private <T> void setupLiveSearch(TextField searchField,
+                                     TableView<T> table,
+                                     ObservableList<T> baseList,
+                                     Function<T, String> textExtractor) {
+
+        FilteredList<T> filtered = new FilteredList<>(baseList, p -> true);
+
+        searchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            String filter = (newVal == null) ? "" : newVal.trim().toLowerCase();
+            filtered.setPredicate(item -> {
+                if (filter.isEmpty()) return true;
+                String text = textExtractor.apply(item);
+                return text != null && text.toLowerCase().contains(filter);
+            });
+        });
+
+        SortedList<T> sorted = new SortedList<>(filtered);
+        sorted.comparatorProperty().bind(table.comparatorProperty());
+        table.setItems(sorted);
+    }
 
     @FXML
     void search_client(MouseEvent event) {
-        FilteredList<Client> filtered = new FilteredList<>(listClient, p -> true);
-        search_input_client.textProperty().addListener((obs, oldV, newV) -> {
-            filtered.setPredicate(c -> {
-                if (newV == null || newV.trim().isEmpty()) return true;
-                return c.getName() != null && c.getName().toLowerCase().contains(newV.toLowerCase());
-            });
-        });
-        SortedList<Client> sorted = new SortedList<>(filtered);
-        sorted.comparatorProperty().bind(TableClient.comparatorProperty());
-        TableClient.setItems(sorted);
+        // live search is already wired in initialize()
     }
 
     @FXML
     void search_supplier(MouseEvent event) {
-        FilteredList<Supplier> filtered = new FilteredList<>(listSupplier, p -> true);
-        search_input_supplier.textProperty().addListener((obs, oldV, newV) -> {
-            filtered.setPredicate(s -> {
-                if (newV == null || newV.trim().isEmpty()) return true;
-                return s.getNameSupplier() != null && s.getNameSupplier().toLowerCase().contains(newV.toLowerCase());
-            });
-        });
-        SortedList<Supplier> sorted = new SortedList<>(filtered);
-        sorted.comparatorProperty().bind(TableSupplier.comparatorProperty());
-        TableSupplier.setItems(sorted);
+        // live search is already wired in initialize()
     }
 
-    // ========================= EXPORT (SHARED) =========================
-
-    private void wireExport(ComboBox<String> combo, String sheetName, String title, String query) {
-        combo.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
-            if (newV == null) return;
-            if ("PDF".equals(newV)) {
-                exportToPDF(title, query);
-            } else {
-                exportToExcel(sheetName, query, title);
-            }
-            combo.getSelectionModel().clearSelection();
-        });
-    }
-
-    private void exportToPDF(String title, String query) {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Save As");
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
-        File file = chooser.showSaveDialog(null);
+    // ========================= EXPORTS =========================
+    private void exportToPDF(String typeList, String query) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Save As");
+        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
+        File file = fileChooser.showSaveDialog(null);
         if (file == null) return;
 
         Document document = new Document();
@@ -480,18 +436,17 @@ public class ClientsSuppliersController implements Initializable {
             document.open();
 
             Font font = new Font(Font.FontFamily.HELVETICA, 20, Font.BOLD);
-            Paragraph paragraph = new Paragraph(title, font);
+            Paragraph paragraph = new Paragraph(typeList, font);
             paragraph.setAlignment(Element.ALIGN_CENTER);
             document.add(paragraph);
             document.add(new Paragraph(" "));
 
             PdfPTable table = new PdfPTable(5);
-            addPdfHeader(table);
+            addPdfHeader(table, "ID", "Name", "Type", "Phone", "Email");
 
             try (Connection connection = DBConfig.getConnection();
-                 PreparedStatement ps = connection.prepareStatement(query);
-                 ResultSet rs = ps.executeQuery()) {
-
+                 Statement statement = connection.createStatement();
+                 ResultSet rs = statement.executeQuery(query)) {
                 while (rs.next()) {
                     table.addCell(rs.getString("id"));
                     table.addCell(rs.getString("name"));
@@ -502,52 +457,38 @@ public class ClientsSuppliersController implements Initializable {
             }
 
             document.add(table);
-            displayAlert("Success", title + " exported successfully", Alert.AlertType.INFORMATION);
+            displayAlert("Success", typeList + " exported successfully", Alert.AlertType.INFORMATION);
 
         } catch (Exception e) {
-            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            logAndAlert("Export PDF failed", e);
         } finally {
             if (document.isOpen()) document.close();
         }
     }
 
-    private void addPdfHeader(PdfPTable table) {
-        PdfPCell c1 = new PdfPCell(new Phrase("ID"));
-        c1.setBackgroundColor(BaseColor.LIGHT_GRAY);
-        table.addCell(c1);
-
-        PdfPCell c2 = new PdfPCell(new Phrase("Name"));
-        c2.setBackgroundColor(BaseColor.LIGHT_GRAY);
-        table.addCell(c2);
-
-        PdfPCell c3 = new PdfPCell(new Phrase("Type"));
-        c3.setBackgroundColor(BaseColor.LIGHT_GRAY);
-        table.addCell(c3);
-
-        PdfPCell c4 = new PdfPCell(new Phrase("Phone"));
-        c4.setBackgroundColor(BaseColor.LIGHT_GRAY);
-        table.addCell(c4);
-
-        PdfPCell c5 = new PdfPCell(new Phrase("Email"));
-        c5.setBackgroundColor(BaseColor.LIGHT_GRAY);
-        table.addCell(c5);
+    private void addPdfHeader(PdfPTable table, String... headers) {
+        for (String h : headers) {
+            PdfPCell cell = new PdfPCell(new Phrase(h));
+            cell.setBackgroundColor(BaseColor.LIGHT_GRAY);
+            table.addCell(cell);
+        }
     }
 
-    private void exportToExcel(String sheetName, String query, String title) {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Save As");
-        chooser.getExtensionFilters().addAll(
+    private void exportToExcel(String sheetName, String query, String typeList) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Save As");
+        fileChooser.getExtensionFilters().addAll(
                 new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"),
                 new FileChooser.ExtensionFilter("CSV Files", "*.csv")
         );
 
-        File file = chooser.showSaveDialog(null);
+        File file = fileChooser.showSaveDialog(null);
         if (file == null) return;
 
         try (Workbook workbook = new XSSFWorkbook();
              Connection connection = DBConfig.getConnection();
-             PreparedStatement ps = connection.prepareStatement(query);
-             ResultSet rs = ps.executeQuery();
+             Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(query);
              FileOutputStream out = new FileOutputStream(file)) {
 
             Sheet sheet = workbook.createSheet(sheetName);
@@ -570,10 +511,72 @@ public class ClientsSuppliersController implements Initializable {
             }
 
             workbook.write(out);
-            displayAlert("Success", title + " exported successfully", Alert.AlertType.INFORMATION);
+            displayAlert("Success", typeList + " exported successfully", Alert.AlertType.INFORMATION);
 
         } catch (Exception e) {
-            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            logAndAlert("Export Excel failed", e);
         }
+    }
+
+    // ========================= SMALL HELPERS (REDUCE DUPLICATION) =========================
+    private Image loadIcon(String path) {
+        try {
+            return new Image(getClass().getResourceAsStream(path));
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Missing icon: " + path, e);
+            return null;
+        }
+    }
+
+    private ImageView iconView(Image img) {
+        ImageView iv = new ImageView(img);
+        iv.setStyle(ICON_STYLE);
+        iv.setPreserveRatio(true);
+        iv.setSmooth(true);
+        iv.setCache(true);
+        return iv;
+    }
+
+    private HBox buildActionBox(ImageView... icons) {
+        HBox box = new HBox(icons);
+        box.setStyle("-fx-alignment:center");
+        for (ImageView iv : icons) {
+            HBox.setMargin(iv, new Insets(1, 1, 0, 3));
+        }
+        return box;
+    }
+
+    private boolean confirmDelete(String title, String header) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        Optional<ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == ButtonType.OK;
+    }
+
+    private void info(String title, String header) {
+        Alert alertInfo = new Alert(Alert.AlertType.INFORMATION);
+        alertInfo.setTitle(title);
+        alertInfo.setHeaderText(header);
+        alertInfo.showAndWait();
+    }
+
+    private void showStage(String title, Scene scene) {
+        Stage stage = new Stage();
+        stage.getIcons().add(new Image(APP_ICON_PATH));
+        stage.setTitle(title);
+        stage.setResizable(false);
+        stage.setScene(scene);
+        centerScreen(stage);
+        stage.show();
+    }
+
+    private <T> T getCurrentRowItem(TableView<T> table) {
+        return table.getSelectionModel().getSelectedItem();
+    }
+
+    private void logAndAlert(String msg, Exception e) {
+        LOGGER.log(Level.SEVERE, msg, e);
+        displayAlert(ERROR_TITLE, msg, Alert.AlertType.ERROR);
     }
 }
