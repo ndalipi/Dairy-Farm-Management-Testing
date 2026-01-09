@@ -28,13 +28,12 @@ import javafx.scene.image.ImageView;
 import javafx.scene.input.InputMethodEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
-import javafx.scene.text.TextAlignment;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.Callback;
 import org.apache.poi.ss.formula.functions.T;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xslf.util.PDFFontMapper;
+
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.File;
@@ -49,6 +48,13 @@ import java.util.ResourceBundle;
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
 public class ClientsSuppliersController implements Initializable {
+    private static final String APP_ICON_PATH =
+            "file:src/main/resources/images/logo.png";
+
+    private static final String ICON_STYLE =
+            "-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;";
+
+    private static final String ERROR_TITLE = "Error";
 
     @FXML
     private TableView<Client> TableClient;
@@ -155,28 +161,29 @@ public class ClientsSuppliersController implements Initializable {
     public ObservableList<Client> getClients() {
         String select_query = "SELECT * from `clients`";
 
-        try {
-            statement = connection.prepareStatement(select_query);
-            resultSet = statement.executeQuery();
+        try (Connection connection = DBConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(select_query);
+             ResultSet resultSet = statement.executeQuery()) {
+
             while (resultSet.next()) {
                 Client client = new Client();
-
                 client.setId(resultSet.getInt("id"));
-                client.setName((resultSet.getString("name")));
+                client.setName(resultSet.getString("name"));
                 client.setType(resultSet.getString("type"));
                 client.setPhone(resultSet.getString("phone"));
                 client.setEmail(resultSet.getString("email"));
                 client.setCreated_at(resultSet.getTimestamp("created_at"));
                 client.setUpdated_at(resultSet.getTimestamp("updated_at"));
-
                 listClient.add(client);
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
-
         }
+
         return listClient;
     }
+
 
     public void displayClients() throws SQLException, ClassNotFoundException {
         ObservableList<Client> list = getClients();
@@ -207,7 +214,8 @@ public class ClientsSuppliersController implements Initializable {
 
                     } else {
                         ImageView iv_viewDetail = new ImageView();
-                        iv_viewDetail.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+                        iv_viewDetail.setStyle(ICON_STYLE);
+
                         iv_viewDetail.setImage(imgViewDetail);
                         iv_viewDetail.setPreserveRatio(true);
                         iv_viewDetail.setSmooth(true);
@@ -218,7 +226,8 @@ public class ClientsSuppliersController implements Initializable {
                         setText(null);
 
                         ImageView iv_edit = new ImageView();
-                        iv_edit.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+                        iv_edit.setStyle(ICON_STYLE);
+
                         iv_edit.setImage(imgEdit);
                         iv_edit.setPreserveRatio(true);
                         iv_edit.setSmooth(true);
@@ -229,7 +238,7 @@ public class ClientsSuppliersController implements Initializable {
                         setText(null);
 
                         ImageView iv_delete = new ImageView();
-                        iv_delete.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+                        iv_delete.setStyle(ICON_STYLE);
 
                         iv_delete.setImage(imgDelete);
                         iv_delete.setPreserveRatio(true);
@@ -274,11 +283,13 @@ public class ClientsSuppliersController implements Initializable {
                                 ClientDetailsController clientDetailsController = fxmlLoader.getController();
                                 clientDetailsController.fetchClient(client);
                             } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
                                 e.printStackTrace();
                             }
                             Stage stage = new Stage();
-                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
+                            stage.getIcons().add(new Image(APP_ICON_PATH));
+
                             stage.setTitle("Clients Details");
                             stage.setResizable(false);
                             stage.setScene(scene);
@@ -293,14 +304,16 @@ public class ClientsSuppliersController implements Initializable {
                             try {
                                 scene = new Scene(fxmlLoader.load());
                             } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
                                 e.printStackTrace();
                             }
                             NewClientController newClientController = fxmlLoader.getController();
                             newClientController.setUpdate(true);
                             newClientController.fetchClient(client.getId(), client.getName(), client.getEmail(), client.getPhone(), client.getType());
                             Stage stage = new Stage();
-                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
+                            stage.getIcons().add(new Image(APP_ICON_PATH));
+
                             stage.setTitle("Update Client");
                             stage.setResizable(false);
                             stage.setScene(scene);
@@ -400,126 +413,119 @@ public class ClientsSuppliersController implements Initializable {
         fileChooser.setTitle("Save As");
         fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
         File file = fileChooser.showSaveDialog(null);
+
+        if (file == null) return;
+
         PdfPCell table_cell;
-        int r = 0;
-        int g = 255;
-        int b = 255;
+        int r = 0, g = 255, b = 255;
         BaseColor cell_background_color = new BaseColor(r, g, b);
         Font font = new Font(Font.FontFamily.HELVETICA, 20, Font.FontStyle.BOLD.ordinal());
-        if (file != null) {
-            try {
-                Document document = new Document();
-                PdfWriter.getInstance(document, new FileOutputStream(file));
-                document.open();
-                try {
-                    Paragraph paragraph = new Paragraph(typeList);
-                    paragraph.setAlignment(Element.ALIGN_CENTER);
-                    paragraph.setFont(font);
-                    document.add(paragraph);
-                    document.add(new Paragraph(" "));
 
-                } catch (Exception e) {
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+        Document document = new Document();
+
+        try {
+            PdfWriter.getInstance(document, new FileOutputStream(file));
+            document.open();
+
+            Paragraph paragraph = new Paragraph(typeList);
+            paragraph.setAlignment(Element.ALIGN_CENTER);
+            paragraph.setFont(font);
+            document.add(paragraph);
+            document.add(new Paragraph(" "));
+
+            PdfPTable table = new PdfPTable(5);
+
+            table_cell = new PdfPCell(new Phrase("ID"));
+            table_cell.setBackgroundColor(BaseColor.LIGHT_GRAY);
+            table.addCell(table_cell);
+
+            table_cell = new PdfPCell(new Phrase("Name"));
+            table_cell.setBackgroundColor(BaseColor.LIGHT_GRAY);
+            table.addCell(table_cell);
+
+            table_cell = new PdfPCell(new Phrase("Type"));
+            table_cell.setBackgroundColor(BaseColor.LIGHT_GRAY);
+            table.addCell(table_cell);
+
+            table_cell = new PdfPCell(new Phrase("Phone"));
+            table_cell.setBackgroundColor(BaseColor.LIGHT_GRAY);
+            table.addCell(table_cell);
+
+            table_cell = new PdfPCell(new Phrase("Email"));
+            table_cell.setBackgroundColor(BaseColor.LIGHT_GRAY);
+            table.addCell(table_cell);
+
+
+            try (Connection connection = DBConfig.getConnection();
+                 Statement statement = connection.createStatement();
+                 ResultSet rs = statement.executeQuery(query)) {
+
+                while (rs.next()) {
+                    table.addCell(rs.getString("id"));
+                    table.addCell(rs.getString("name"));
+                    table.addCell(rs.getString("type"));
+                    table.addCell(rs.getString("phone"));
+                    table.addCell(rs.getString("email"));
                 }
-                PdfPTable table = new PdfPTable(5);
+            }
 
-                table_cell = new PdfPCell(new Phrase("ID"));
-                table_cell.setBackgroundColor(cell_background_color.LIGHT_GRAY);
-                table.addCell(table_cell);
-                table_cell = new PdfPCell(new Phrase("Name"));
-                table_cell.setBackgroundColor(cell_background_color.LIGHT_GRAY);
-                table.addCell(table_cell);
-                table_cell = new PdfPCell(new Phrase("Type"));
-                table_cell.setBackgroundColor(cell_background_color.LIGHT_GRAY);
-                table.addCell(table_cell);
-                table_cell = new PdfPCell(new Phrase("Phone"));
-                table_cell.setBackgroundColor(cell_background_color.LIGHT_GRAY);
-                table.addCell(table_cell);
-                table_cell = new PdfPCell(new Phrase("Email"));
-                table_cell.setBackgroundColor(cell_background_color.LIGHT_GRAY);
-                table.addCell(table_cell);
+            document.add(table);
+            displayAlert("Success", typeList + " exported successfully", Alert.AlertType.INFORMATION);
 
+        } catch (Exception e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
 
-                //get all clients from database
-//                String query = "SELECT * FROM `clients`";
-//                for (Supplier client:listSupplier) {
-//                    table.addCell(client.getId()+"");
-//                    table.addCell(client.getNameSupplier());
-//                    table.addCell(client.getTypeSupplier());
-//                    table.addCell(client.getPhoneSupplier());
-//                    table.addCell(client.getEmailSupplier());
-//
-//                }
-                try {
-                    Statement statement = connection.createStatement();
-                    ResultSet rs = statement.executeQuery(query);
-                    while (rs.next()) {
-                        table.addCell(rs.getString("id"));
-                        table.addCell(rs.getString("name"));
-                        table.addCell(rs.getString("type"));
-                        table.addCell(rs.getString("phone"));
-                        table.addCell(rs.getString("email"));
-
-
-                    }
-
-                    document.add(table);
-                    document.close();
-                    displayAlert("Success", typeList + " exported successfully", Alert.AlertType.INFORMATION);
-                } catch (Exception e) {
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                }
-            } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+        } finally {
+            // Ensure the PDF is closed even if an exception happens
+            if (document.isOpen()) {
+                document.close();
             }
         }
     }
 
+
     void exportToExcel(String NameSheet, String query, String typeList) {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"), new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"),
+                new FileChooser.ExtensionFilter("CSV Files", "*.csv")
+        );
+
         File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try {
-                Workbook workbook = new XSSFWorkbook();
-                Sheet sheet = workbook.createSheet(NameSheet);
-                Row header = sheet.createRow(0);
-                header.createCell(0).setCellValue("ID");
-                header.createCell(1).setCellValue("Name");
-                header.createCell(2).setCellValue("Type");
-                header.createCell(3).setCellValue("Phone");
-                header.createCell(4).setCellValue("Email");
+        if (file == null) return;
 
-                //get all clients from database
+        try (Workbook workbook = new XSSFWorkbook();
+             Connection connection = DBConfig.getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(query);
+             FileOutputStream fileOutputStream = new FileOutputStream(file)) {
 
-                try {
-                    Statement statement = connection.createStatement();
-                    ResultSet rs = statement.executeQuery(query);
-                    while (rs.next()) {
-                        int rowNum = rs.getRow();
-                        Row row = sheet.createRow(rowNum);
-                        row.createCell(0).setCellValue(rs.getString("id"));
-                        row.createCell(1).setCellValue(rs.getString("name"));
-                        row.createCell(2).setCellValue(rs.getString("type"));
-                        row.createCell(3).setCellValue(rs.getString("phone"));
-                        row.createCell(4).setCellValue(rs.getString("email"));
+            Sheet sheet = workbook.createSheet(NameSheet);
 
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("ID");
+            header.createCell(1).setCellValue("Name");
+            header.createCell(2).setCellValue("Type");
+            header.createCell(3).setCellValue("Phone");
+            header.createCell(4).setCellValue("Email");
 
-                    }
-                } catch (Exception e) {
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                }
-
-
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                workbook.write(fileOutputStream);
-                workbook.close();
-
-                displayAlert("Success", typeList + "exported successfully", Alert.AlertType.INFORMATION);
-            } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+            int rowNum = 1; // start after header
+            while (rs.next()) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(rs.getString("id"));
+                row.createCell(1).setCellValue(rs.getString("name"));
+                row.createCell(2).setCellValue(rs.getString("type"));
+                row.createCell(3).setCellValue(rs.getString("phone"));
+                row.createCell(4).setCellValue(rs.getString("email"));
             }
+
+            workbook.write(fileOutputStream);
+            displayAlert("Success", typeList + " exported successfully", Alert.AlertType.INFORMATION);
+
+        } catch (Exception e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
         }
     }
 
@@ -528,27 +534,29 @@ public class ClientsSuppliersController implements Initializable {
     public ObservableList<Supplier> getSuppliers() {
         String select_query = "SELECT * from `suppliers`";
 
-        try {
-            statement = connection.prepareStatement(select_query);
-            resultSet = statement.executeQuery();
+        try (Connection connection = DBConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(select_query);
+             ResultSet resultSet = statement.executeQuery()) {
+
             while (resultSet.next()) {
                 Supplier supplier = new Supplier();
                 supplier.setId(resultSet.getInt("id"));
-                supplier.setNameSupplier((resultSet.getString("name")));
+                supplier.setNameSupplier(resultSet.getString("name"));
                 supplier.setTypeSupplier(resultSet.getString("type"));
                 supplier.setPhoneSupplier(resultSet.getString("phone"));
                 supplier.setEmailSupplier(resultSet.getString("email"));
                 supplier.setCreated_at(resultSet.getTimestamp("created_at"));
                 supplier.setUpdated_at(resultSet.getTimestamp("updated_at"));
-
                 listSupplier.add(supplier);
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
-
         }
+
         return listSupplier;
     }
+
 
     public void displaySuppliers() throws SQLException, ClassNotFoundException {
         ObservableList<Supplier> list = getSuppliers();
@@ -645,11 +653,12 @@ public class ClientsSuppliersController implements Initializable {
                                 SupplierDetailsController supplierDetailsController = fxmlLoader.getController();
                                 supplierDetailsController.fetchSupplier(supplier);
                             } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
                                 e.printStackTrace();
                             }
                             Stage stage = new Stage();
-                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
+                            stage.getIcons().add(new Image(APP_ICON_PATH));
+
                             stage.setTitle("Clients Details");
                             stage.setResizable(false);
                             stage.setScene(scene);
@@ -664,14 +673,15 @@ public class ClientsSuppliersController implements Initializable {
                             try {
                                 scene = new Scene(fxmlLoader.load());
                             } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
                                 e.printStackTrace();
                             }
                             NewSupplierController newSupplierController = fxmlLoader.getController();
                             newSupplierController.setUpdate(true);
                             newSupplierController.fetchSupplier(supplier);
                             Stage stage = new Stage();
-                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
+                            stage.getIcons().add(new Image(APP_ICON_PATH));
+
                             stage.setTitle("Update Supplier");
                             stage.setResizable(false);
                             stage.setScene(scene);
