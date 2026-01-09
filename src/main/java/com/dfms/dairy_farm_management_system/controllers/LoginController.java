@@ -20,171 +20,173 @@ import java.io.IOException;
 import java.net.URL;
 import java.sql.*;
 import java.util.ResourceBundle;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-import static com.dfms.dairy_farm_management_system.connection.DBConfig.disconnect;
 import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConnection;
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
 public class LoginController implements Initializable {
+
+    private static final Logger LOGGER = Logger.getLogger(LoginController.class.getName());
+
+    private static final String COL_EMAIL = "email";
+    private static final String COL_PASSWORD = "password";
+
+    // ✅ Hotspot fix: debug-only prefills (OFF by default)
+    // Enable only if you run with: -Ddfms.debug.prefillLogin=true
+    private static final String PREFILL_PROP = "dfms.debug.prefillLogin";
+
+    @FXML private Circle close_btn;
+    @FXML TextField email_input;
+    @FXML private Label forget_password;
+    @FXML Button login_btn;
+    @FXML PasswordField password_input;
+
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
         email_input.setText(getEmail());
-        password_input.setText(DEFAULT_PASSWORD);
+
+        // ✅ only prefill password in explicit debug mode
+        if (Boolean.getBoolean(PREFILL_PROP)) {
+            password_input.setText(DEFAULT_PASSWORD);
+        } else {
+            password_input.clear();
+        }
     }
 
     public String getEmail() {
         String query = "SELECT email FROM `users` ORDER BY `users`.`id` ASC LIMIT 1";
-        Connection connection = getConnection();
-        try {
-            PreparedStatement statement = connection.prepareStatement(query);
-            ResultSet resultSet = statement.executeQuery();
-            resultSet.next();
-            return resultSet.getString("email");
+
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(query);
+             ResultSet resultSet = statement.executeQuery()) {
+
+            if (resultSet.next()) {
+                return resultSet.getString(COL_EMAIL);
+            }
+
         } catch (SQLException e) {
-            System.out.println(e.getMessage());
-        } finally {
-            disconnect();
+            LOGGER.log(Level.WARNING, "Failed to fetch default email", e);
         }
-        return null;
+
+        return "";
     }
 
     @FXML
-    private Circle close_btn;
-
-    @FXML
-    TextField email_input;
-
-    @FXML
-    private Label forget_password;
-
-    @FXML
-    Button login_btn;
-
-    @FXML
-    PasswordField password_input;
-
-    @FXML
-    void login(MouseEvent event) throws SQLException {
-
-        if (email_input.getText() == null || password_input.getText() == null) {
-            displayAlert("Error", "Please fill the required fields!", Alert.AlertType.ERROR);
-            return;
-        }
-
-        String email = email_input.getText().trim();
-        String password = password_input.getText().trim();
-
-        if (validatePassword(email, password)) {
-            //store logged in user in session
-            String query = "SELECT * FROM `users` WHERE email = '" + email + "'";
-            String Query = "SELECT * FROM `employees` WHERE email = '" + email + "'";
-            Statement statement = getConnection().createStatement();
-            ResultSet resultSet = statement.executeQuery(query);
-            User user = new User();
-            if (resultSet.next()) {
-                user.setId(resultSet.getInt("id"));
-                user.setFirstName(resultSet.getString("first_name"));
-                user.setLastName(resultSet.getString("last_name"));
-                user.setEmail(resultSet.getString("email"));
-                user.setEncryptedPassword(resultSet.getString("password"));
-                user.setRole(resultSet.getInt("role"));
-                user.setSalary(resultSet.getFloat("salary"));
-                user.setGender(resultSet.getString("gender"));
-                user.setPhone(resultSet.getString("phone"));
-                user.setAdress(resultSet.getString("address"));
-                user.setCin(resultSet.getString("cin"));
-                user.setCreatedAt(resultSet.getTimestamp("created_at"));
-                user.setUpdatedAt(resultSet.getTimestamp("updated_at"));
-            }
-            resultSet = statement.executeQuery(Query);
-            if (resultSet.next()) {
-                user.setHireDate(resultSet.getDate("hire_date"));
-                user.setContractType(resultSet.getString("contract_type"));
-            }
-            disconnect();
-            Session.setCurrentUser(user);
-            switchToMainLayout(event);
-        } else {
-            displayAlert("Invalid email or password", "Please check your email and password and try again", Alert.AlertType.ERROR);
-        }
+    void login(MouseEvent event) {
+        Node source = (Node) event.getSource();
+        handleLogin(source);
     }
 
     @FXML
     void loginWithEnter(KeyEvent event) {
-        //check if enter key is pressed
-        if (event.getCode().toString().equals("ENTER")) {
-            try {
-                String email = email_input.getText().trim();
-                String password = password_input.getText().trim();
+        if (!"ENTER".equals(event.getCode().toString())) return;
+        Node source = (Node) event.getSource();
+        handleLogin(source);
+    }
 
-                if (validatePassword(email, password)) {
-                    //store logged in user in session
-                    String query = "SELECT * FROM `users` WHERE email = '" + email + "'";
-                    String Query = "SELECT * FROM `employees` WHERE email = '" + email + "'";
-                    Statement statement = getConnection().createStatement();
-                    ResultSet resultSet = statement.executeQuery(query);
-                    User user = new User();
-                    if (resultSet.next()) {
+    private void handleLogin(Node sourceNode) {
+        String emailRaw = (email_input.getText() == null) ? "" : email_input.getText();
+        String passRaw = (password_input.getText() == null) ? "" : password_input.getText();
 
-                        user.setId(resultSet.getInt("id"));
-                        user.setFirstName(resultSet.getString("first_name"));
-                        user.setLastName(resultSet.getString("last_name"));
-                        user.setEmail(resultSet.getString("email"));
-                        user.setPassword(resultSet.getString("password"));
-                        user.setRole(resultSet.getInt("role"));
-                        user.setSalary(resultSet.getFloat("salary"));
-                        user.setGender(resultSet.getString("gender"));
-                        user.setPhone(resultSet.getString("phone"));
-                        user.setAdress(resultSet.getString("address"));
-                        user.setCin(resultSet.getString("cin"));
-                        user.setCreatedAt(resultSet.getTimestamp("created_at"));
-                        user.setUpdatedAt(resultSet.getTimestamp("updated_at"));
-                    }
-                    resultSet = statement.executeQuery(Query);
-                    if (resultSet.next()) {
-                        user.setHireDate(resultSet.getDate("hire_date"));
-                        user.setContractType(resultSet.getString("contract_type"));
-                    }
-                    disconnect();
-                    Session.setCurrentUser(user);
-                    //switch to main layout
-                    FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("main_layout.fxml"));
-                    Stage stage = new Stage();
-                    Scene scene = null;
-                    try {
-                        scene = new Scene(fxmlLoader.load());
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    stage.setTitle("Dairy Farm Management System");
-                    stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
-                    stage.setScene(scene);
-                    ((Node) event.getSource()).getScene().getWindow().hide();
-                    stage.show();
-                } else {
-                    displayAlert("Invalid email or password", "Please check your email and password and try again", Alert.AlertType.ERROR);
-                }
-            } catch (SQLException throwables) {
-                throwables.printStackTrace();
+        String email = emailRaw.trim();
+        String password = passRaw.trim();
+
+        // ✅ better validation (getText is usually not null; it’s empty)
+        if (email.isBlank() || password.isBlank()) {
+            displayAlert("Error", "Please fill the required fields!", Alert.AlertType.ERROR);
+            return;
+        }
+
+        try {
+            if (!validatePassword(email, password)) {
+                displayAlert("Invalid email or password",
+                        "Please check your email and password and try again",
+                        Alert.AlertType.ERROR);
+                return;
             }
+
+            User user = loadUserByEmail(email);
+            if (user == null) {
+                displayAlert("Invalid email or password",
+                        "Please check your email and password and try again",
+                        Alert.AlertType.ERROR);
+                return;
+            }
+
+            Session.setCurrentUser(user);
+            switchToMainLayout(sourceNode);
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Login failed due to DB error", e);
+            displayAlert("Error", "Error occurred while trying to login.", Alert.AlertType.ERROR);
         }
     }
 
-    public boolean validatePassword(String email, String password) throws SQLException {
-        //check if user exists limit 1
-        try {
-            String query = "SELECT `password` FROM `users` WHERE email = ? LIMIT 1";
-            PreparedStatement statement = getConnection().prepareStatement(query);
+    // ✅ NO DUPLICATION: all user loading in one place (also fixes SQL injection)
+    private User loadUserByEmail(String email) throws SQLException {
+        String userQuery = "SELECT * FROM `users` WHERE email = ? LIMIT 1";
+        String employeeQuery = "SELECT * FROM `employees` WHERE email = ? LIMIT 1";
+
+        User user = null;
+
+        try (Connection connection = getConnection();
+             PreparedStatement userStmt = connection.prepareStatement(userQuery);
+             PreparedStatement empStmt = connection.prepareStatement(employeeQuery)) {
+
+            userStmt.setString(1, email);
+
+            try (ResultSet rs = userStmt.executeQuery()) {
+                if (rs.next()) {
+                    user = new User();
+                    user.setId(rs.getInt("id"));
+                    user.setFirstName(rs.getString("first_name"));
+                    user.setLastName(rs.getString("last_name"));
+                    user.setEmail(rs.getString(COL_EMAIL));
+                    user.setEncryptedPassword(rs.getString(COL_PASSWORD));
+                    user.setRole(rs.getInt("role"));
+                    user.setSalary(rs.getFloat("salary"));
+                    user.setGender(rs.getString("gender"));
+                    user.setPhone(rs.getString("phone"));
+                    user.setAdress(rs.getString("address"));
+                    user.setCin(rs.getString("cin"));
+                    user.setCreatedAt(rs.getTimestamp("created_at"));
+                    user.setUpdatedAt(rs.getTimestamp("updated_at"));
+                } else {
+                    return null;
+                }
+            }
+
+            empStmt.setString(1, email);
+            try (ResultSet rsEmp = empStmt.executeQuery()) {
+                if (rsEmp.next()) {
+                    user.setHireDate(rsEmp.getDate("hire_date"));
+                    user.setContractType(rsEmp.getString("contract_type"));
+                }
+            }
+        }
+
+        return user;
+    }
+
+    public boolean validatePassword(String email, String password) {
+        String query = "SELECT `password` FROM `users` WHERE email = ? LIMIT 1";
+
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(query)) {
+
             statement.setString(1, email);
-            ResultSet resultSet = statement.executeQuery();
-            if (resultSet.next()) {
-                return MD5(resultSet.getString("password"), password);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return MD5(resultSet.getString(COL_PASSWORD), password);
+                }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
-        } finally {
-            disconnect();
+            LOGGER.log(Level.WARNING, "Password validation failed", e);
         }
+
         return false;
     }
 
@@ -194,21 +196,24 @@ public class LoginController implements Initializable {
         System.exit(0);
     }
 
-    public void switchToMainLayout(MouseEvent event) {
+    // ✅ Single navigation method used for both mouse + enter
+    private void switchToMainLayout(Node sourceNode) {
         FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("main_layout.fxml"));
-        Stage stage = new Stage();
-        Scene scene = null;
         try {
-            scene = new Scene(fxmlLoader.load());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+            Scene scene = new Scene(fxmlLoader.load());
 
-        stage.setTitle("Dairy Farm Management System");
-        stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
-        stage.setScene(scene);
-        // centerScreen(stage);
-        ((Node) event.getSource()).getScene().getWindow().hide();
-        stage.show();
+            Stage stage = new Stage();
+            stage.setTitle("Dairy Farm Management System");
+            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
+            stage.setScene(scene);
+
+            // close current window
+            sourceNode.getScene().getWindow().hide();
+
+            stage.show();
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Failed to open main layout", e);
+            displayAlert("Error", "Failed to open main layout.", Alert.AlertType.ERROR);
+        }
     }
 }
