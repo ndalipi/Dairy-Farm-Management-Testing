@@ -8,12 +8,7 @@ import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.New
 import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.SupplierDetailsController;
 import com.dfms.dairy_farm_management_system.models.Client;
 import com.dfms.dairy_farm_management_system.models.Supplier;
-import com.itextpdf.text.BaseColor;
-import com.itextpdf.text.Document;
-import com.itextpdf.text.Element;
-import com.itextpdf.text.Font;
-import com.itextpdf.text.Paragraph;
-import com.itextpdf.text.Phrase;
+import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
@@ -47,12 +42,14 @@ import java.net.URL;
 import java.sql.*;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
+@SuppressWarnings("java:S116") // FXML fields use specific names; renaming breaks FXML injection
 public class ClientsSuppliersController implements Initializable {
 
     private static final Logger LOGGER = Logger.getLogger(ClientsSuppliersController.class.getName());
@@ -63,6 +60,9 @@ public class ClientsSuppliersController implements Initializable {
 
     private static final ObservableList<String> EXPORT_OPTIONS =
             FXCollections.observableArrayList("PDF", "Excel");
+
+    private static final String CLIENTS_QUERY = "SELECT * FROM `clients`";
+    private static final String SUPPLIERS_QUERY = "SELECT * FROM `suppliers`";
 
     // ========================= CLIENT UI =========================
     @FXML private TableView<Client> TableClient;
@@ -88,39 +88,37 @@ public class ClientsSuppliersController implements Initializable {
     @FXML private ComboBox<String> export_combo_sup;
     @FXML private TextField search_input_supplier;
 
-    // Backing lists (kept fresh)
+    // Backing lists
     private final ObservableList<Client> listClient = FXCollections.observableArrayList();
     private final ObservableList<Supplier> listSupplier = FXCollections.observableArrayList();
 
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
-        export_combo.setItems(EXPORT_OPTIONS);
-        export_combo_sup.setItems(EXPORT_OPTIONS);
-
+        initExportCombos();
         setupClientTableColumns();
         setupSupplierTableColumns();
 
         refreshTableClient();
-        refreshTableSupplier();
+        refreshTableSupplier(); // ✅ FIXED: now exists as no-arg method
 
-        // Export listeners
-        export_combo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == null) return;
-            String query = "SELECT * FROM `clients`";
-            if ("PDF".equals(newVal)) exportToPDF("Clients List", query);
-            else exportToExcel("Clients", query, "Clients List");
-        });
+        wireExport(export_combo, "Clients List", "Clients", CLIENTS_QUERY);
+        wireExport(export_combo_sup, "Suppliers List", "Suppliers", SUPPLIERS_QUERY);
 
-        export_combo_sup.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == null) return;
-            String query = "SELECT * FROM `suppliers`";
-            if ("PDF".equals(newVal)) exportToPDF("Suppliers List", query);
-            else exportToExcel("Suppliers", query, "Suppliers List");
-        });
-
-        // Live search hooks (no duplication)
         setupLiveSearch(search_input_client, TableClient, listClient, Client::getName);
         setupLiveSearch(search_input_supplier, TableSupplier, listSupplier, Supplier::getNameSupplier);
+    }
+
+    private void initExportCombos() {
+        export_combo.setItems(EXPORT_OPTIONS);
+        export_combo_sup.setItems(EXPORT_OPTIONS);
+    }
+
+    private void wireExport(ComboBox<String> combo, String title, String sheetName, String query) {
+        combo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null) return;
+            if ("PDF".equals(newVal)) exportToPDF(title, query);
+            else exportToExcel(sheetName, query, title);
+        });
     }
 
     // ========================= OPEN POPUPS =========================
@@ -142,7 +140,17 @@ public class ClientsSuppliersController implements Initializable {
         colemailClient.setCellValueFactory(new PropertyValueFactory<>("email"));
         colphoneClient.setCellValueFactory(new PropertyValueFactory<>("phone"));
 
-        actionClient.setCellFactory(createActionCellFactoryForClients());
+        actionClient.setCellFactory(createActionCellFactory(
+                TableClient,
+                this::refreshTableClient,
+                this::openClientDetails,
+                this::openEditClient,
+                client -> client.delete(),
+                "Delete Confirmation",
+                "Are you sure you want to delete this client?",
+                "Delete Client",
+                "Client deleted successfully"
+        ));
     }
 
     public void refreshTableClient() {
@@ -156,80 +164,17 @@ public class ClientsSuppliersController implements Initializable {
     }
 
     private ObservableList<Client> fetchClients() {
-        ObservableList<Client> out = FXCollections.observableArrayList();
-        String selectQuery = "SELECT * FROM `clients`";
-
-        try (Connection connection = DBConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(selectQuery);
-             ResultSet resultSet = statement.executeQuery()) {
-
-            while (resultSet.next()) {
-                Client client = new Client();
-                client.setId(resultSet.getInt("id"));
-                client.setName(resultSet.getString("name"));
-                client.setType(resultSet.getString("type"));
-                client.setPhone(resultSet.getString("phone"));
-                client.setEmail(resultSet.getString("email"));
-                client.setCreated_at(resultSet.getTimestamp("created_at"));
-                client.setUpdated_at(resultSet.getTimestamp("updated_at"));
-                out.add(client);
-            }
-
-        } catch (SQLException e) {
-            logAndAlert("Failed to load clients", e);
-        }
-
-        return out;
-    }
-
-    private Callback<TableColumn<Client, String>, TableCell<Client, String>> createActionCellFactoryForClients() {
-        return (TableColumn<Client, String> param) -> new TableCell<>() {
-            private final Image imgEdit = loadIcon("/images/edit.png");
-            private final Image imgDelete = loadIcon("/images/delete.png");
-            private final Image imgView = loadIcon("/images/eye.png");
-
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty) {
-                    setGraphic(null);
-                    setText(null);
-                    return;
-                }
-
-                ImageView ivEdit = iconView(imgEdit);
-                ImageView ivDelete = iconView(imgDelete);
-                ImageView ivView = iconView(imgView);
-
-                HBox manage = buildActionBox(ivEdit, ivDelete, ivView);
-
-                ivDelete.setOnMouseClicked(e -> {
-                    Client client = getCurrentRowItem(TableClient);
-                    if (client == null) return;
-
-                    if (confirmDelete("Delete Confirmation", "Are you sure you want to delete this client?")) {
-                        client.delete();
-                        refreshTableClient();
-                        info("Delete Client", "Client deleted successfully");
-                    }
-                });
-
-                ivView.setOnMouseClicked(e -> {
-                    Client client = getCurrentRowItem(TableClient);
-                    if (client == null) return;
-                    openClientDetails(client);
-                });
-
-                ivEdit.setOnMouseClicked(e -> {
-                    Client client = getCurrentRowItem(TableClient);
-                    if (client == null) return;
-                    openEditClient(client);
-                });
-
-                setGraphic(manage);
-                setText(null);
-            }
-        };
+        return fetchList(CLIENTS_QUERY, rs -> {
+            Client client = new Client();
+            client.setId(rs.getInt("id"));
+            client.setName(rs.getString("name"));
+            client.setType(rs.getString("type"));
+            client.setPhone(rs.getString("phone"));
+            client.setEmail(rs.getString("email"));
+            client.setCreated_at(rs.getTimestamp("created_at"));
+            client.setUpdated_at(rs.getTimestamp("updated_at"));
+            return client;
+        }, "Failed to load clients");
     }
 
     private void openClientDetails(Client client) {
@@ -239,7 +184,6 @@ public class ClientsSuppliersController implements Initializable {
             Scene scene = new Scene(loader.load());
             ClientDetailsController controller = loader.getController();
             controller.fetchClient(client);
-
             showStage("Client Details", scene);
         } catch (IOException e) {
             logAndAlert("Failed to open client details", e);
@@ -251,11 +195,9 @@ public class ClientsSuppliersController implements Initializable {
             FXMLLoader loader = new FXMLLoader(Main.class.getResource(
                     "/com/dfms/dairy_farm_management_system/popups/add_new_client.fxml"));
             Scene scene = new Scene(loader.load());
-
             NewClientController controller = loader.getController();
             controller.setUpdate(true);
             controller.fetchClient(client.getId(), client.getName(), client.getEmail(), client.getPhone(), client.getType());
-
             showStage("Update Client", scene);
         } catch (IOException e) {
             logAndAlert("Failed to open edit client", e);
@@ -270,48 +212,106 @@ public class ClientsSuppliersController implements Initializable {
         colemailSupplier.setCellValueFactory(new PropertyValueFactory<>("emailSupplier"));
         colphoneSupplier.setCellValueFactory(new PropertyValueFactory<>("phoneSupplier"));
 
-        colactionSupplier.setCellFactory(createActionCellFactoryForSuppliers());
+        colactionSupplier.setCellFactory(createActionCellFactory(
+                TableSupplier,
+                this::refreshTableSupplier,
+                this::openSupplierDetails,
+                this::openEditSupplier,
+                supplier -> supplier.delete(),
+                "Delete Confirmation",
+                "Are you sure you want to delete this supplier?",
+                "Delete Supplier",
+                "Supplier deleted successfully"
+        ));
     }
 
+    // ✅ THIS is the method your initialize() needs (no args)
     private void refreshTableSupplier() {
         listSupplier.setAll(fetchSuppliers());
         TableSupplier.setItems(listSupplier);
     }
 
+    // ✅ Keep FXML handler for refresh button
     @FXML
     void refreshTableSupplier(MouseEvent event) {
         refreshTableSupplier();
     }
 
     private ObservableList<Supplier> fetchSuppliers() {
-        ObservableList<Supplier> out = FXCollections.observableArrayList();
-        String selectQuery = "SELECT * FROM `suppliers`";
+        return fetchList(SUPPLIERS_QUERY, rs -> {
+            Supplier supplier = new Supplier();
+            supplier.setId(rs.getInt("id"));
+            supplier.setNameSupplier(rs.getString("name"));
+            supplier.setTypeSupplier(rs.getString("type"));
+            supplier.setPhoneSupplier(rs.getString("phone"));
+            supplier.setEmailSupplier(rs.getString("email"));
+            supplier.setCreated_at(rs.getTimestamp("created_at"));
+            supplier.setUpdated_at(rs.getTimestamp("updated_at"));
+            return supplier;
+        }, "Failed to load suppliers");
+    }
+
+    private void openSupplierDetails(Supplier supplier) {
+        try {
+            FXMLLoader loader = new FXMLLoader(Main.class.getResource(
+                    "/com/dfms/dairy_farm_management_system/popups/supplier_details.fxml"));
+            Scene scene = new Scene(loader.load());
+            SupplierDetailsController controller = loader.getController();
+            controller.fetchSupplier(supplier);
+            showStage("Supplier Details", scene);
+        } catch (IOException e) {
+            logAndAlert("Failed to open supplier details", e);
+        }
+    }
+
+    private void openEditSupplier(Supplier supplier) {
+        try {
+            FXMLLoader loader = new FXMLLoader(Main.class.getResource(
+                    "/com/dfms/dairy_farm_management_system/popups/add_new_supplier.fxml"));
+            Scene scene = new Scene(loader.load());
+            NewSupplierController controller = loader.getController();
+            controller.setUpdate(true);
+            controller.fetchSupplier(supplier);
+            showStage("Update Supplier", scene);
+        } catch (IOException e) {
+            logAndAlert("Failed to open edit supplier", e);
+        }
+    }
+
+    // ========================= GENERIC DB FETCH =========================
+    @FunctionalInterface
+    private interface RowMapper<T> {
+        T map(ResultSet rs) throws SQLException;
+    }
+
+    private <T> ObservableList<T> fetchList(String query, RowMapper<T> mapper, String errorMsg) {
+        ObservableList<T> out = FXCollections.observableArrayList();
 
         try (Connection connection = DBConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(selectQuery);
+             PreparedStatement statement = connection.prepareStatement(query);
              ResultSet resultSet = statement.executeQuery()) {
 
-            while (resultSet.next()) {
-                Supplier supplier = new Supplier();
-                supplier.setId(resultSet.getInt("id"));
-                supplier.setNameSupplier(resultSet.getString("name"));
-                supplier.setTypeSupplier(resultSet.getString("type"));
-                supplier.setPhoneSupplier(resultSet.getString("phone"));
-                supplier.setEmailSupplier(resultSet.getString("email"));
-                supplier.setCreated_at(resultSet.getTimestamp("created_at"));
-                supplier.setUpdated_at(resultSet.getTimestamp("updated_at"));
-                out.add(supplier);
-            }
-
+            while (resultSet.next()) out.add(mapper.map(resultSet));
         } catch (SQLException e) {
-            logAndAlert("Failed to load suppliers", e);
+            logAndAlert(errorMsg, e);
         }
 
         return out;
     }
 
-    private Callback<TableColumn<Supplier, String>, TableCell<Supplier, String>> createActionCellFactoryForSuppliers() {
-        return (TableColumn<Supplier, String> param) -> new TableCell<>() {
+    // ========================= GENERIC ACTION CELL =========================
+    private <T> Callback<TableColumn<T, String>, TableCell<T, String>> createActionCellFactory(
+            TableView<T> table,
+            Runnable refreshAfter,
+            Consumer<T> onView,
+            Consumer<T> onEdit,
+            Consumer<T> onDelete,
+            String confirmTitle,
+            String confirmHeader,
+            String infoTitle,
+            String infoHeader
+    ) {
+        return (TableColumn<T, String> param) -> new TableCell<>() {
             private final Image imgEdit = loadIcon("/images/edit.png");
             private final Image imgDelete = loadIcon("/images/delete.png");
             private final Image imgView = loadIcon("/images/eye.png");
@@ -332,62 +332,36 @@ public class ClientsSuppliersController implements Initializable {
                 HBox manage = buildActionBox(ivEdit, ivDelete, ivView);
 
                 ivDelete.setOnMouseClicked(e -> {
-                    Supplier supplier = getCurrentRowItem(TableSupplier);
-                    if (supplier == null) return;
+                    T rowItem = getCurrentRowItem(table);
+                    if (rowItem == null) return;
 
-                    if (confirmDelete("Delete Confirmation", "Are you sure you want to delete this supplier?")) {
-                        supplier.delete();
-                        refreshTableSupplier();
-                        info("Delete Supplier", "Supplier deleted successfully");
+                    if (confirmDelete(confirmTitle, confirmHeader)) {
+                        try {
+                            onDelete.accept(rowItem);
+                            refreshAfter.run();
+                            info(infoTitle, infoHeader);
+                        } catch (Exception ex) {
+                            logAndAlert("Delete failed", ex);
+                        }
                     }
                 });
 
                 ivView.setOnMouseClicked(e -> {
-                    Supplier supplier = getCurrentRowItem(TableSupplier);
-                    if (supplier == null) return;
-                    openSupplierDetails(supplier);
+                    T rowItem = getCurrentRowItem(table);
+                    if (rowItem == null) return;
+                    onView.accept(rowItem);
                 });
 
                 ivEdit.setOnMouseClicked(e -> {
-                    Supplier supplier = getCurrentRowItem(TableSupplier);
-                    if (supplier == null) return;
-                    openEditSupplier(supplier);
+                    T rowItem = getCurrentRowItem(table);
+                    if (rowItem == null) return;
+                    onEdit.accept(rowItem);
                 });
 
                 setGraphic(manage);
                 setText(null);
             }
         };
-    }
-
-    private void openSupplierDetails(Supplier supplier) {
-        try {
-            FXMLLoader loader = new FXMLLoader(Main.class.getResource(
-                    "/com/dfms/dairy_farm_management_system/popups/supplier_details.fxml"));
-            Scene scene = new Scene(loader.load());
-            SupplierDetailsController controller = loader.getController();
-            controller.fetchSupplier(supplier);
-
-            showStage("Supplier Details", scene);
-        } catch (IOException e) {
-            logAndAlert("Failed to open supplier details", e);
-        }
-    }
-
-    private void openEditSupplier(Supplier supplier) {
-        try {
-            FXMLLoader loader = new FXMLLoader(Main.class.getResource(
-                    "/com/dfms/dairy_farm_management_system/popups/add_new_supplier.fxml"));
-            Scene scene = new Scene(loader.load());
-
-            NewSupplierController controller = loader.getController();
-            controller.setUpdate(true);
-            controller.fetchSupplier(supplier);
-
-            showStage("Update Supplier", scene);
-        } catch (IOException e) {
-            logAndAlert("Failed to open edit supplier", e);
-        }
     }
 
     // ========================= SEARCH (GENERIC) =========================
@@ -413,14 +387,10 @@ public class ClientsSuppliersController implements Initializable {
     }
 
     @FXML
-    void search_client(MouseEvent event) {
-        // live search is already wired in initialize()
-    }
+    void search_client(MouseEvent event) { /* already live */ }
 
     @FXML
-    void search_supplier(MouseEvent event) {
-        // live search is already wired in initialize()
-    }
+    void search_supplier(MouseEvent event) { /* already live */ }
 
     // ========================= EXPORTS =========================
     private void exportToPDF(String typeList, String query) {
@@ -518,7 +488,7 @@ public class ClientsSuppliersController implements Initializable {
         }
     }
 
-    // ========================= SMALL HELPERS (REDUCE DUPLICATION) =========================
+    // ========================= SMALL HELPERS =========================
     private Image loadIcon(String path) {
         try {
             return new Image(getClass().getResourceAsStream(path));
