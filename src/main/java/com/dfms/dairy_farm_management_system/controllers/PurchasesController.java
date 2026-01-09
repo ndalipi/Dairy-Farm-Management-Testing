@@ -5,7 +5,12 @@ import com.dfms.dairy_farm_management_system.connection.DBConfig;
 import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.NewPurchaseController;
 import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.PurchaseDetailsController;
 import com.dfms.dairy_farm_management_system.models.Purchase;
-import com.itextpdf.text.*;
+import com.itextpdf.text.BaseColor;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.FontFactory;
+import com.itextpdf.text.PageSize;
+import com.itextpdf.text.Paragraph;
 import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
@@ -16,7 +21,13 @@ import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -35,12 +46,19 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URL;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Optional;
 import java.util.ResourceBundle;
 
 import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConnection;
-import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
+import static com.dfms.dairy_farm_management_system.helpers.Helper.centerScreen;
+import static com.dfms.dairy_farm_management_system.helpers.Helper.displayAlert;
+import static com.dfms.dairy_farm_management_system.helpers.Helper.openNewWindow;
 
 public class PurchasesController implements Initializable {
 
@@ -61,7 +79,11 @@ public class PurchasesController implements Initializable {
     private static final String COL_SUPPLIER_NAME = "supplier_name";
     private static final String COL_PURCHASE_DATE = "purchase_date";
 
-    private static final int PDF_COLUMNS_COUNT = 5;
+    private static final String TITLE_TEXT = "Purchases List";
+    private static final String SUBTITLE_TEXT = "This is the list of the purchases";
+
+    private static final String[] EXPORT_OPTIONS = {"PDF", "Excel"};
+    private static final String[] TABLE_HEADERS = {"Product", "Price", "Quantity", "Supplier", "Date"};
 
     private static final Image EDIT_IMG = new Image(PurchasesController.class.getResourceAsStream("/images/edit.png"));
     private static final Image DELETE_IMG = new Image(PurchasesController.class.getResourceAsStream("/images/delete.png"));
@@ -93,22 +115,21 @@ public class PurchasesController implements Initializable {
     public void initialize(URL url, ResourceBundle resourceBundle) {
         BasicConfigurator.configure();
 
-        export_combo.setItems(FXCollections.observableArrayList("PDF", "Excel"));
-
-        export_combo.getSelectionModel().selectedItemProperty().addListener((observableValue, s, t1) -> {
-            if (t1 == null) return;
-            if ("PDF".equals(t1)) exportToPDF();
+        export_combo.setItems(FXCollections.observableArrayList(EXPORT_OPTIONS));
+        export_combo.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
+            if (newV == null) return;
+            if ("PDF".equals(newV)) exportToPDF();
             else exportToExcel();
         });
 
-        setupColumns();
-        setupActionsColumn();
+        bindColumns();
+        actions_c.setCellFactory(createActionsFactory());
+        wireLiveSearch();
 
-        liveSearch(search_input, PurchaseTable);
         refreshTablePurchase();
     }
 
-    private void setupColumns() {
+    private void bindColumns() {
         product_c.setCellValueFactory(new PropertyValueFactory<>(PROP_PRODUCT_NAME));
         price_c.setCellValueFactory(new PropertyValueFactory<>(PROP_PRICE));
         quantity_c.setCellValueFactory(new PropertyValueFactory<>(PROP_QUANTITY));
@@ -126,7 +147,6 @@ public class PurchasesController implements Initializable {
 
             while (rs.next()) {
                 Purchase purchase = new Purchase();
-
                 purchase.setId(rs.getInt("id"));
                 purchase.setSupplier_id(rs.getInt("supplier_id"));
                 purchase.setStock_id(rs.getInt("stock_id"));
@@ -135,109 +155,136 @@ public class PurchasesController implements Initializable {
                 purchase.setPurchase_date(rs.getDate(PROP_PURCHASE_DATE));
                 purchase.setCreated_at(rs.getTimestamp("created_at"));
                 purchase.setUpdated_at(rs.getTimestamp("updated_at"));
-
                 list.add(purchase);
             }
         }
-
         return list;
     }
 
     public void refreshTablePurchase() {
         try {
-            ObservableList<Purchase> list = getPurchase();
-            PurchaseTable.setItems(list);
+            PurchaseTable.setItems(getPurchase());
         } catch (SQLException e) {
             displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
     }
 
-    private void setupActionsColumn() {
-        actions_c.setCellFactory(createActionsFactory());
-    }
-
     private Callback<TableColumn<Purchase, String>, TableCell<Purchase, String>> createActionsFactory() {
-        return (TableColumn<Purchase, String> param) -> new TableCell<>() {
-
+        return col -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-
                 if (empty) {
                     setGraphic(null);
                     setText(null);
                     return;
                 }
 
-                ImageView ivView = iconView(VIEW_IMG);
-                ImageView ivEdit = iconView(EDIT_IMG);
-                ImageView ivDelete = iconView(DELETE_IMG);
+                ImageView ivView = buildIcon(VIEW_IMG);
+                ImageView ivEdit = buildIcon(EDIT_IMG);
+                ImageView ivDelete = buildIcon(DELETE_IMG);
 
                 HBox manage = new HBox(ivView, ivEdit, ivDelete);
                 manage.setStyle("-fx-alignment:center");
-                setMargins(ivView, ivEdit, ivDelete);
+                applyMargins(ivView, ivEdit, ivDelete);
 
-                ivDelete.setOnMouseClicked(e -> {
-                    Purchase purchase = getTableView().getItems().get(getIndex());
-                    if (purchase == null) return;
-
-                    if (!confirmDelete("Delete Confirmation", "Are you sure you want to delete this purchase sale?")) return;
-
-                    try {
-                        if (purchase.delete()) {
-                            displayAlert("success", "Purchase deleted successfully", Alert.AlertType.INFORMATION);
-                            refreshTablePurchase();
-                        } else {
-                            displayAlert(ERROR_TITLE, "Error while deleting!!!", Alert.AlertType.ERROR);
-                        }
-                    } catch (Exception ex) {
-                        displayAlert(ERROR_TITLE, ex.getMessage(), Alert.AlertType.ERROR);
-                    }
-                });
-
-                ivEdit.setOnMouseClicked(e -> {
-                    Purchase purchase = getTableView().getItems().get(getIndex());
-                    if (purchase == null) return;
-
-                    openPopup(
-                            "/com/dfms/dairy_farm_management_system/popups/add_new_purchase.fxml",
-                            "Update Purchase",
-                            controller -> {
-                                NewPurchaseController c = (NewPurchaseController) controller;
-                                c.setUpdate(true);
-                                c.fetchPurchase(purchase);
-                            }
-                    );
-                });
-
-                ivView.setOnMouseClicked(e -> {
-                    Purchase purchase = getTableView().getItems().get(getIndex());
-                    if (purchase == null) return;
-
-                    openPopup(
-                            "/com/dfms/dairy_farm_management_system/popups/purchase_details.fxml",
-                            "Purchase Details",
-                            controller -> {
-                                PurchaseDetailsController c = (PurchaseDetailsController) controller;
-                                c.fetchPurchase(
-                                        purchase.getId(),
-                                        purchase.getProduct_name(),
-                                        purchase.getQuantity(),
-                                        purchase.getPrice(),
-                                        purchase.getSupplier_name(),
-                                        (Date) purchase.getPurchase_date()
-                                );
-                            }
-                    );
-                });
+                ivDelete.setOnMouseClicked(e -> onDelete());
+                ivEdit.setOnMouseClicked(e -> onEdit());
+                ivView.setOnMouseClicked(e -> onView());
 
                 setGraphic(manage);
                 setText(null);
             }
+
+            private Purchase current() {
+                int idx = getIndex();
+                if (idx < 0 || idx >= getTableView().getItems().size()) return null;
+                return getTableView().getItems().get(idx);
+            }
+
+            private void onDelete() {
+                Purchase purchase = current();
+                if (purchase == null) return;
+
+                if (!confirm("Delete Confirmation", "Are you sure you want to delete this purchase sale?")) return;
+
+                try {
+                    if (purchase.delete()) {
+                        displayAlert("success", "Purchase deleted successfully", Alert.AlertType.INFORMATION);
+                        refreshTablePurchase();
+                    } else {
+                        displayAlert(ERROR_TITLE, "Error while deleting!!!", Alert.AlertType.ERROR);
+                    }
+                } catch (Exception ex) {
+                    displayAlert(ERROR_TITLE, ex.getMessage(), Alert.AlertType.ERROR);
+                }
+            }
+
+            private void onEdit() {
+                Purchase purchase = current();
+                if (purchase == null) return;
+
+                openPopup(
+                        "/com/dfms/dairy_farm_management_system/popups/add_new_purchase.fxml",
+                        "Update Purchase",
+                        controller -> {
+                            NewPurchaseController c = (NewPurchaseController) controller;
+                            c.setUpdate(true);
+                            c.fetchPurchase(purchase);
+                        }
+                );
+            }
+
+            private void onView() {
+                Purchase purchase = current();
+                if (purchase == null) return;
+
+                openPopup(
+                        "/com/dfms/dairy_farm_management_system/popups/purchase_details.fxml",
+                        "Purchase Details",
+                        controller -> {
+                            PurchaseDetailsController c = (PurchaseDetailsController) controller;
+                            c.fetchPurchase(
+                                    purchase.getId(),
+                                    purchase.getProduct_name(),
+                                    purchase.getQuantity(),
+                                    purchase.getPrice(),
+                                    purchase.getSupplier_name(),
+                                    (Date) purchase.getPurchase_date()
+                            );
+                        }
+                );
+            }
         };
     }
 
-    private ImageView iconView(Image img) {
+    private void wireLiveSearch() {
+        search_input.textProperty().addListener((obs, oldV, newV) -> {
+            if (newV == null || newV.isBlank()) {
+                refreshTablePurchase();
+                return;
+            }
+            String needle = newV.toLowerCase();
+
+            ObservableList<Purchase> filtered = FXCollections.observableArrayList();
+            try {
+                for (Purchase p : getPurchase()) {
+                    String s1 = safeLower(p.getSupplier_name());
+                    String s2 = safeLower(p.getProduct_name());
+                    if (s1.contains(needle) || s2.contains(needle)) filtered.add(p);
+                }
+                PurchaseTable.setItems(filtered);
+            } catch (SQLException e) {
+                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            }
+        });
+    }
+
+    private String safeLower(String s) {
+        return s == null ? "" : s.toLowerCase();
+    }
+
+    private ImageView buildIcon(Image img) {
         ImageView iv = new ImageView(img);
         iv.setStyle(ICON_STYLE);
         iv.setPreserveRatio(true);
@@ -246,13 +293,13 @@ public class PurchasesController implements Initializable {
         return iv;
     }
 
-    private void setMargins(ImageView... views) {
+    private void applyMargins(ImageView... views) {
         for (ImageView v : views) {
             HBox.setMargin(v, new Insets(1, 1, 0, 3));
         }
     }
 
-    private boolean confirmDelete(String title, String header) {
+    private boolean confirm(String title, String header) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle(title);
         alert.setHeaderText(header);
@@ -264,8 +311,7 @@ public class PurchasesController implements Initializable {
         FXMLLoader loader = new FXMLLoader(Main.class.getResource(fxmlPath));
         try {
             Scene scene = new Scene(loader.load());
-            Object controller = loader.getController();
-            initializer.init(controller);
+            initializer.init(loader.getController());
 
             Stage stage = new Stage();
             stage.getIcons().add(new Image(APP_ICON_PATH));
@@ -284,32 +330,6 @@ public class PurchasesController implements Initializable {
         void init(Object controller);
     }
 
-    // ========================= SEARCH =========================
-    public void liveSearch(TextField search_input, TableView<Purchase> table) {
-        search_input.textProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue == null || newValue.isEmpty()) {
-                refreshTablePurchase();
-                return;
-            }
-
-            String needle = newValue.toLowerCase();
-            ObservableList<Purchase> filteredList = FXCollections.observableArrayList();
-            try {
-                for (Purchase p : getPurchase()) {
-                    String supplier = p.getSupplier_name() == null ? "" : p.getSupplier_name().toLowerCase();
-                    String product = p.getProduct_name() == null ? "" : p.getProduct_name().toLowerCase();
-                    if (supplier.contains(needle) || product.contains(needle)) {
-                        filteredList.add(p);
-                    }
-                }
-                table.setItems(filteredList);
-            } catch (SQLException e) {
-                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-            }
-        });
-    }
-
-    // ========================= EXPORT EXCEL =========================
     void exportToExcel() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
@@ -325,13 +345,7 @@ public class PurchasesController implements Initializable {
              FileOutputStream fileOutputStream = new FileOutputStream(file)) {
 
             Sheet sheet = workbook.createSheet("Purchases");
-            Row header = sheet.createRow(0);
-            header.createCell(0).setCellValue("Purchase ID");
-            header.createCell(1).setCellValue("Product");
-            header.createCell(2).setCellValue("Price");
-            header.createCell(3).setCellValue("Quantity");
-            header.createCell(4).setCellValue("Supplier");
-            header.createCell(5).setCellValue("Date");
+            writeSheetHeader(sheet, TABLE_HEADERS);
 
             String query =
                     "SELECT pur.id AS " + COL_PURCHASE_ID + ", " +
@@ -367,7 +381,14 @@ public class PurchasesController implements Initializable {
         }
     }
 
-    // ========================= EXPORT PDF =========================
+    private void writeSheetHeader(Sheet sheet, String[] headers) {
+        Row header = sheet.createRow(0);
+        header.createCell(0).setCellValue("Purchase ID");
+        for (int i = 0; i < headers.length; i++) {
+            header.createCell(i + 1).setCellValue(headers[i]);
+        }
+    }
+
     void exportToPDF() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
@@ -383,25 +404,14 @@ public class PurchasesController implements Initializable {
             PdfWriter.getInstance(document, new FileOutputStream(file));
             document.open();
 
-            Paragraph title = new Paragraph("Purchases List",
-                    FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK));
-            Paragraph text = new Paragraph("This is the list of the purchases",
-                    FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK));
+            writePdfTitle(document, TITLE_TEXT, SUBTITLE_TEXT);
 
-            title.setAlignment(Element.ALIGN_CENTER);
-            text.setAlignment(Element.ALIGN_CENTER);
-            title.setSpacingAfter(30);
-            text.setSpacingAfter(30);
-
-            document.add(title);
-            document.add(text);
-
-            PdfPTable table = new PdfPTable(PDF_COLUMNS_COUNT);
+            PdfPTable table = new PdfPTable(TABLE_HEADERS.length);
             table.setWidthPercentage(100);
             table.setSpacingBefore(11f);
             table.setSpacingAfter(11f);
 
-            addPdfHeader(table);
+            writePdfHeader(table, TABLE_HEADERS);
 
             ObservableList<Purchase> purchases = PurchaseTable.getItems();
             NewPurchaseController controller = new NewPurchaseController();
@@ -410,11 +420,13 @@ public class PurchasesController implements Initializable {
                 Purchase pur = controller.getPurchase(p.getId());
                 if (pur == null) continue;
 
-                table.addCell(new PdfPCell(new Paragraph(pur.getProduct_name()))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph(String.valueOf(pur.getPrice())))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph(String.valueOf(pur.getQuantity())))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph(pur.getSupplier_name()))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph(String.valueOf(pur.getPurchase_date())))).setPadding(5);
+                addPdfRow(table,
+                        pur.getProduct_name(),
+                        String.valueOf(pur.getPrice()),
+                        String.valueOf(pur.getQuantity()),
+                        pur.getSupplier_name(),
+                        String.valueOf(pur.getPurchase_date())
+                );
             }
 
             document.add(table);
@@ -427,11 +439,32 @@ public class PurchasesController implements Initializable {
         }
     }
 
-    private void addPdfHeader(PdfPTable table) {
-        table.addCell(new PdfPCell(new Paragraph("Product", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-        table.addCell(new PdfPCell(new Paragraph("Price", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-        table.addCell(new PdfPCell(new Paragraph("Quantity", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-        table.addCell(new PdfPCell(new Paragraph("Supplier", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-        table.addCell(new PdfPCell(new Paragraph("Date", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+    private void writePdfTitle(Document document, String titleText, String subtitleText) throws Exception {
+        Paragraph title = new Paragraph(titleText, FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK));
+        Paragraph text = new Paragraph(subtitleText, FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK));
+
+        title.setAlignment(Element.ALIGN_CENTER);
+        text.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(30);
+        text.setSpacingAfter(30);
+
+        document.add(title);
+        document.add(text);
+    }
+
+    private void writePdfHeader(PdfPTable table, String[] headers) {
+        for (String h : headers) {
+            PdfPCell cell = new PdfPCell(new Paragraph(h, FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)));
+            cell.setPadding(5);
+            table.addCell(cell);
+        }
+    }
+
+    private void addPdfRow(PdfPTable table, String... values) {
+        for (String v : values) {
+            PdfPCell cell = new PdfPCell(new Paragraph(v == null ? "" : v));
+            cell.setPadding(5);
+            table.addCell(cell);
+        }
     }
 }
