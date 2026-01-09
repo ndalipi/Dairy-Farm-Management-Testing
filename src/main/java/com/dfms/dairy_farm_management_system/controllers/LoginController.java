@@ -33,8 +33,6 @@ public class LoginController implements Initializable {
     private static final String COL_EMAIL = "email";
     private static final String COL_PASSWORD = "password";
 
-    // ✅ Hotspot fix: debug-only prefills (OFF by default)
-    // Enable only if you run with: -Ddfms.debug.prefillLogin=true
     private static final String PREFILL_PROP = "dfms.debug.prefillLogin";
 
     @FXML private Circle close_btn;
@@ -47,7 +45,6 @@ public class LoginController implements Initializable {
     public void initialize(URL url, ResourceBundle resourceBundle) {
         email_input.setText(getEmail());
 
-        // ✅ only prefill password in explicit debug mode
         if (Boolean.getBoolean(PREFILL_PROP)) {
             password_input.setText(DEFAULT_PASSWORD);
         } else {
@@ -93,7 +90,6 @@ public class LoginController implements Initializable {
         String email = emailRaw.trim();
         String password = passRaw.trim();
 
-        // ✅ better validation (getText is usually not null; it’s empty)
         if (email.isBlank() || password.isBlank()) {
             displayAlert("Error", "Please fill the required fields!", Alert.AlertType.ERROR);
             return;
@@ -124,7 +120,6 @@ public class LoginController implements Initializable {
         }
     }
 
-    // ✅ NO DUPLICATION: all user loading in one place (also fixes SQL injection)
     private User loadUserByEmail(String email) throws SQLException {
         String userQuery = "SELECT * FROM `users` WHERE email = ? LIMIT 1";
         String employeeQuery = "SELECT * FROM `employees` WHERE email = ? LIMIT 1";
@@ -196,7 +191,6 @@ public class LoginController implements Initializable {
         System.exit(0);
     }
 
-    // ✅ Single navigation method used for both mouse + enter
     private void switchToMainLayout(Node sourceNode) {
         FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("main_layout.fxml"));
         try {
@@ -207,7 +201,6 @@ public class LoginController implements Initializable {
             stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
             stage.setScene(scene);
 
-            // close current window
             sourceNode.getScene().getWindow().hide();
 
             stage.show();
