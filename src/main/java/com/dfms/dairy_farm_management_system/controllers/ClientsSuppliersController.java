@@ -99,7 +99,7 @@ public class ClientsSuppliersController implements Initializable {
         setupSupplierTableColumns();
 
         refreshTableClient();
-        refreshTableSupplier(); // ✅ FIXED: now exists as no-arg method
+        refreshTableSupplier();
 
         wireExport(export_combo, "Clients List", "Clients", CLIENTS_QUERY);
         wireExport(export_combo_sup, "Suppliers List", "Suppliers", SUPPLIERS_QUERY);
@@ -225,13 +225,11 @@ public class ClientsSuppliersController implements Initializable {
         ));
     }
 
-    // ✅ THIS is the method your initialize() needs (no args)
     private void refreshTableSupplier() {
         listSupplier.setAll(fetchSuppliers());
         TableSupplier.setItems(listSupplier);
     }
 
-    // ✅ Keep FXML handler for refresh button
     @FXML
     void refreshTableSupplier(MouseEvent event) {
         refreshTableSupplier();
