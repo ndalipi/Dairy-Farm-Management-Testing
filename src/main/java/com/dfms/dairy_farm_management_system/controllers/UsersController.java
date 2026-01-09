@@ -48,6 +48,9 @@ import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConne
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
 public class UsersController implements Initializable {
+    private static final String ICON_STYLE = "-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;";
+    private static final String ERROR_TITLE = "Error";
+
     private static final int COLUMNS_COUNT = 9;
 
     @Override
@@ -70,7 +73,6 @@ public class UsersController implements Initializable {
         });
     }
 
-    private Statement statement;
     private PreparedStatement preparedStatement;
     private Connection connection = getConnection();
 
@@ -111,9 +113,10 @@ public class UsersController implements Initializable {
     //get all the employees
     public ObservableList<User> getUsers() {
         ObservableList<User> list = FXCollections.observableArrayList();
-        String query = "SELECT * FROM `users`";
+        String query = "SELECT id, first_name, last_name, cin, email, gender, phone, salary, address, role, created_at FROM `users`";
+
         try {
-            statement = connection.createStatement();
+            Statement statement = connection.createStatement();
             ResultSet resultSet = statement.executeQuery(query);
             while (resultSet.next()) {
                 User user = new User();
@@ -131,7 +134,8 @@ public class UsersController implements Initializable {
                 list.add(user);
             }
         } catch (Exception e) {
-            displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
         }
         return list;
     }
@@ -169,7 +173,7 @@ public class UsersController implements Initializable {
                         iv_view_details.setCache(true);
 
                         view_details_btn.setGraphic(iv_view_details);
-                        view_details_btn.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+                        view_details_btn.setStyle(ICON_STYLE);
 
                         ImageView iv_edit = new ImageView();
                         iv_edit.setImage(edit_img);
@@ -178,7 +182,7 @@ public class UsersController implements Initializable {
                         iv_edit.setCache(true);
 
                         edit_btn.setGraphic(iv_edit);
-                        edit_btn.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+                        edit_btn.setStyle(ICON_STYLE);
 
                         ImageView iv_delete = new ImageView();
                         iv_delete.setImage(delete_img);
@@ -187,7 +191,7 @@ public class UsersController implements Initializable {
                         iv_delete.setCache(true);
 
                         delete_btn.setGraphic(iv_delete);
-                        delete_btn.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+                        delete_btn.setStyle(ICON_STYLE);
 
                         HBox managebtn = new HBox(view_details_btn, edit_btn, delete_btn);
                         managebtn.setStyle("-fx-alignment:center");
@@ -209,7 +213,8 @@ public class UsersController implements Initializable {
                                     user.delete();
                                     displayUsers();
                                 } catch (Exception e) {
-                                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                    displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
                                 }
                             }
                         });
@@ -224,7 +229,8 @@ public class UsersController implements Initializable {
                                 UpdateUserController controller = fxmlLoader.getController();
                                 controller.initData(user);
                             } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
                                 e.printStackTrace();
                             }
                             Stage stage = new Stage();
@@ -246,7 +252,8 @@ public class UsersController implements Initializable {
                                 UserDetailsController controller = fxmlLoader.getController();
                                 controller.initData(user);
                             } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
                                 e.printStackTrace();
                             }
                             Stage stage = new Stage();
@@ -266,7 +273,7 @@ public class UsersController implements Initializable {
         users_table.setItems(users);
     }
 
-    public void openAddUser(MouseEvent mouseEvent) throws IOException {
+    public void openAddUser() throws IOException {
         openNewWindow("Add user", "add_new_user");
     }
 
@@ -301,11 +308,17 @@ public class UsersController implements Initializable {
     void exportToExcel() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"), new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"),
+                new FileChooser.ExtensionFilter("CSV Files", "*.csv")
+        );
+
         File file = fileChooser.showSaveDialog(null);
         if (file != null) {
-            try {
-                Workbook workbook = new XSSFWorkbook();
+            try (
+                    Workbook workbook = new XSSFWorkbook();
+                    FileOutputStream fileOutputStream = new FileOutputStream(file)
+            ) {
                 Sheet sheet = workbook.createSheet("Employees");
                 Row header = sheet.createRow(1);
                 header.createCell(1).setCellValue("First Name");
@@ -317,11 +330,10 @@ public class UsersController implements Initializable {
                 header.createCell(7).setCellValue("Gender");
                 header.createCell(8).setCellValue("Salary");
 
-                //get users displayed in table
+                // get users displayed in table
                 ObservableList<User> users = users_table.getItems();
 
-                //get employee of each row
-                //used a method in my updateEmplyeeController to get the employee of each row based on the cin
+                // get employee of each row
                 UpdateEmployeeController controller = new UpdateEmployeeController();
 
                 for (Employee employee : users) {
@@ -341,16 +353,16 @@ public class UsersController implements Initializable {
                     row.createCell(8).setCellValue(String.valueOf(emp.getSalary()));
                 }
 
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
                 workbook.write(fileOutputStream);
-                workbook.close();
-
                 displayAlert("Success", "Employees exported successfully", Alert.AlertType.INFORMATION);
+
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
             }
         }
     }
+
 
     void exportToPDF() {
         FileChooser fileChooser = new FileChooser();
@@ -380,7 +392,8 @@ public class UsersController implements Initializable {
                     document.add(text);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                    displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
                 }
                 PdfPTable table = new PdfPTable(COLUMNS_COUNT);
 
@@ -439,7 +452,8 @@ public class UsersController implements Initializable {
                 document.close();
                 displayAlert("Success", "Employees exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+
             }
         }
     }
