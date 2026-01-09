@@ -2,12 +2,21 @@ package com.dfms.dairy_farm_management_system.controllers;
 
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.scene.chart.*;
+import javafx.scene.chart.BarChart;
+import javafx.scene.chart.CategoryAxis;
+import javafx.scene.chart.LineChart;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.PieChart;
+import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
 import javafx.scene.text.Text;
 
 import java.net.URL;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Map;
 import java.util.ResourceBundle;
 
 import static com.dfms.dairy_farm_management_system.connection.DBConfig.executeQuery;
@@ -16,289 +25,228 @@ import static com.dfms.dairy_farm_management_system.helpers.Helper.displayAlert;
 
 public class DashboardController implements Initializable {
 
+    private static final String ERROR_TITLE = "Error";
+
+    private static final String COUNT_SQL_PREFIX = "SELECT COUNT(*) FROM ";
+    private static final String SQL_SUM_PRICE = "SELECT SUM(price) FROM ";
+
+    private static final String TABLE_ANIMALS = "animals";
+    private static final String TABLE_ANIMALS_SALES = "animals_sales";
+    private static final String TABLE_MILK_SALES = "milk_sales";
+
+    private static final String TYPE_COW = "cow";
+    private static final String TYPE_CALF = "calf";
+    private static final String TYPE_BULL = "bull";
+
+    private static final String DAY_SUN = "Sun";
+    private static final String DAY_MON = "Mon";
+    private static final String DAY_TUE = "Tue";
+    private static final String DAY_WED = "Wed";
+    private static final String DAY_THU = "Thu";
+    private static final String DAY_FRI = "Fri";
+    private static final String DAY_SAT = "Sat";
+
+    private static final Map<String, String> DAY_NAME = Map.of(
+            DAY_SUN, "Sunday",
+            DAY_MON, "Monday",
+            DAY_TUE, "Tuesday",
+            DAY_WED, "Wednesday",
+            DAY_THU, "Thursday",
+            DAY_FRI, "Friday",
+            DAY_SAT, "Saturday"
+    );
+
+    private final Connection connection = getConnection();
+
+    @FXML private Text today_earnings;
+    @FXML private Text today_sales;
+    @FXML private Text total_bulls;
+    @FXML private Text total_calfs;
+    @FXML private Text total_clients;
+    @FXML private Text total_cows;
+    @FXML private Text total_products;
+    @FXML private Text total_suppliers;
+    @FXML private Text total_employees;
+
+    @FXML private BarChart<String, Number> barChart;
+    @FXML private PieChart pieChart;
+    @FXML private LineChart<String, Number> lineChart;
+    @FXML private CategoryAxis xAxis;
+    @FXML private NumberAxis yAxis;
+
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
         try {
             initDashboard();
         } catch (SQLException e) {
-            displayAlert("Error", "Error occurred while loading dashboard", Alert.AlertType.ERROR);
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
 
-        //fill the charts with real data
         fillPieChart();
         fillBarChart();
         fillLineChart();
     }
 
-    private Statement statement;
-    private PreparedStatement preparedStatement;
-    private Connection connection = getConnection();
-    ResultSet resultSet = null;
-
-    @FXML
-    private Text today_earnings;
-
-    @FXML
-    private Text today_sales;
-
-    @FXML
-    private Text total_bulls;
-
-    @FXML
-    private Text total_calfs;
-
-    @FXML
-    private Text total_clients;
-
-    @FXML
-    private Text total_cows;
-
-    @FXML
-    private Text total_products;
-
-    @FXML
-    private Text total_suppliers;
-
-    @FXML
-    private Text total_employees;
-    @FXML
-    private BarChart<String, Number> barChart;
-
-    @FXML
-    private PieChart pieChart;
-    @FXML
-    private LineChart<String, Number> lineChart;
-    @FXML
-    private CategoryAxis xAxis;
-
-    @FXML
-    private NumberAxis yAxis;
-
     public void initDashboard() throws SQLException {
-        //get total employees
-        resultSet = executeQuery("SELECT COUNT(*) FROM employees");
-        if (resultSet.next()) {
-            total_employees.setText(resultSet.getString(1));
-        }
+        total_employees.setText(String.valueOf(countAll("employees")));
+        total_suppliers.setText(String.valueOf(countAll("suppliers")));
+        total_products.setText(String.valueOf(countAll("stocks")));
+        total_clients.setText(String.valueOf(countAll("clients")));
 
-        //get total suppliers
-        resultSet = executeQuery("SELECT COUNT(*) FROM suppliers");
-        if (resultSet.next()) {
-            total_suppliers.setText(resultSet.getString(1));
-        }
+        total_cows.setText(String.valueOf(countAnimalsOfType(TYPE_COW)));
+        total_calfs.setText(String.valueOf(countAnimalsOfType(TYPE_CALF)));
+        total_bulls.setText(String.valueOf(countAnimalsOfType(TYPE_BULL)));
 
-        //get total products
-        resultSet = executeQuery("SELECT COUNT(*) FROM stocks");
-        if (resultSet.next()) {
-            total_products.setText(resultSet.getString(1));
-        }
+        int salesToday = countTodaySales(TABLE_ANIMALS_SALES);
+        today_sales.setText(String.valueOf(salesToday));
 
-        //get total clients
-        resultSet = executeQuery("SELECT COUNT(*) FROM clients");
-        if (resultSet.next()) {
-            total_clients.setText(resultSet.getString(1));
-        }
-
-        //get total cows
-        resultSet = executeQuery("SELECT COUNT(*) FROM animals WHERE type = 'cow'");
-        if (resultSet.next()) {
-            total_cows.setText(resultSet.getString(1));
-        }
-
-        //get total calfs
-        resultSet = executeQuery("SELECT COUNT(*) FROM animals WHERE type = 'calf'");
-        if (resultSet.next()) {
-            total_calfs.setText(resultSet.getString(1));
-        }
-
-        //get total bulls
-        resultSet = executeQuery("SELECT COUNT(*) FROM animals WHERE type = 'bull'");
-        if (resultSet.next()) {
-            total_bulls.setText(resultSet.getString(1));
-        }
-
-        //get today sales
-        resultSet = executeQuery("SELECT COUNT(*) FROM animals_sales WHERE sale_date = CURDATE()");
-        if (resultSet.next()) {
-            today_sales.setText(resultSet.getString(1));
-        }
-        if (resultSet.getString(1) == null) {
-            today_sales.setText("0");
-        }
-
-        //get today earnings
-        resultSet = executeQuery("SELECT SUM(price) FROM animals_sales WHERE sale_date = CURDATE()");
-        if (resultSet.next()) {
-            today_earnings.setText("$" + resultSet.getString(1));
-        }
-        if (resultSet.getString(1) == null) {
-            today_earnings.setText("$0");
-        }
+        int earningsToday = sumTodayPrice(TABLE_ANIMALS_SALES);
+        today_earnings.setText("$" + earningsToday);
     }
 
-    //fill PieChart with data
     public void fillPieChart() {
         try {
-            String query = "SELECT COUNT(*) FROM animals WHERE type = 'cow'";
-            preparedStatement = connection.prepareStatement(query);
-            resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                total_cows.setText(resultSet.getString(1));
-            }
+            int cows = countAnimalsOfType(TYPE_COW);
+            int calfs = countAnimalsOfType(TYPE_CALF);
+            int bulls = countAnimalsOfType(TYPE_BULL);
 
-            query = "SELECT COUNT(*) FROM animals WHERE type = 'calf'";
-            preparedStatement = connection.prepareStatement(query);
-            resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                total_calfs.setText(resultSet.getString(1));
-            }
+            total_cows.setText(String.valueOf(cows));
+            total_calfs.setText(String.valueOf(calfs));
+            total_bulls.setText(String.valueOf(bulls));
 
-            query = "SELECT COUNT(*) FROM animals WHERE type = 'bull'";
-            preparedStatement = connection.prepareStatement(query);
-            resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                total_bulls.setText(resultSet.getString(1));
-            }
-
-            PieChart.Data cows = new PieChart.Data("Cows", Integer.parseInt(total_cows.getText()));
-            PieChart.Data clafs = new PieChart.Data("Calfs", Integer.parseInt(total_calfs.getText()));
-            PieChart.Data bulls = new PieChart.Data("Bulls", Integer.parseInt(total_bulls.getText()));
-
-            pieChart.getData().add(cows);
-            pieChart.getData().add(clafs);
-            pieChart.getData().add(bulls);
+            pieChart.getData().clear();
+            pieChart.getData().addAll(
+                    new PieChart.Data("Cows", cows),
+                    new PieChart.Data("Calfs", calfs),
+                    new PieChart.Data("Bulls", bulls)
+            );
         } catch (SQLException e) {
-            e.printStackTrace();
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
     }
 
-    //fill BarChart with sales of each day
     public void fillBarChart() {
         xAxis.setLabel("Days");
         yAxis.setLabel("Sales");
 
-        XYChart.Series<String, Number> animal_sales = new XYChart.Series<>();
-        XYChart.Series<String, Number> milk_sales = new XYChart.Series<>();
+        XYChart.Series<String, Number> animalSales = new XYChart.Series<>();
+        XYChart.Series<String, Number> milkSales = new XYChart.Series<>();
 
-        animal_sales.setName("Animal Sales");
-        milk_sales.setName("Milk Sales");
+        animalSales.setName("Animal Sales");
+        milkSales.setName("Milk Sales");
 
-        //get animal sales
-        animal_sales.getData().add(new XYChart.Data<>("Sun", getSalesOfSpecificDay("Sun", "animals_sales")));
-        animal_sales.getData().add(new XYChart.Data<>("Mon", getSalesOfSpecificDay("Mon", "animals_sales")));
-        animal_sales.getData().add(new XYChart.Data<>("Tue", getSalesOfSpecificDay("Tue", "animals_sales")));
-        animal_sales.getData().add(new XYChart.Data<>("Wed", getSalesOfSpecificDay("Wed", "animals_sales")));
-        animal_sales.getData().add(new XYChart.Data<>("Thu", getSalesOfSpecificDay("Thu", "animals_sales")));
-        animal_sales.getData().add(new XYChart.Data<>("Fri", getSalesOfSpecificDay("Fri", "animals_sales")));
-        animal_sales.getData().add(new XYChart.Data<>("Sat", getSalesOfSpecificDay("Sat", "animals_sales")));
+        addWeekSeries(animalSales, TABLE_ANIMALS_SALES);
+        addWeekSeries(milkSales, TABLE_MILK_SALES);
 
-        //get milk sales
-        milk_sales.getData().add(new XYChart.Data<>("Sun", getSalesOfSpecificDay("Sun", "milk_sales")));
-        milk_sales.getData().add(new XYChart.Data<>("Mon", getSalesOfSpecificDay("Mon", "milk_sales")));
-        milk_sales.getData().add(new XYChart.Data<>("Tue", getSalesOfSpecificDay("Tue", "milk_sales")));
-        milk_sales.getData().add(new XYChart.Data<>("Wed", getSalesOfSpecificDay("Wed", "milk_sales")));
-        milk_sales.getData().add(new XYChart.Data<>("Thu", getSalesOfSpecificDay("Thu", "milk_sales")));
-        milk_sales.getData().add(new XYChart.Data<>("Fri", getSalesOfSpecificDay("Fri", "milk_sales")));
-        milk_sales.getData().add(new XYChart.Data<>("Sat", getSalesOfSpecificDay("Sat", "milk_sales")));
-
-        //set data to bar chart
-        barChart.getData().add(animal_sales);
-        barChart.getData().add(milk_sales);
+        barChart.getData().clear();
+        barChart.getData().addAll(animalSales, milkSales);
     }
 
-    //fill line chart with earnings of each day
     public void fillLineChart() {
         xAxis.setLabel("Days");
         yAxis.setLabel("Count of animals sales");
 
         XYChart.Series<String, Number> data = new XYChart.Series<>();
+        addWeekEarningsSeries(data);
 
-        data.getData().add(new XYChart.Data<>("Sun", getEarningsOfSpecificDay("Sun")));
-        data.getData().add(new XYChart.Data<>("Mon", getEarningsOfSpecificDay("Mon")));
-        data.getData().add(new XYChart.Data<>("Tue", getEarningsOfSpecificDay("Tue")));
-        data.getData().add(new XYChart.Data<>("Wed", getEarningsOfSpecificDay("Wed")));
-        data.getData().add(new XYChart.Data<>("Thu", getEarningsOfSpecificDay("Thu")));
-        data.getData().add(new XYChart.Data<>("Fri", getEarningsOfSpecificDay("Fri")));
-        data.getData().add(new XYChart.Data<>("Sat", getEarningsOfSpecificDay("Sat")));
-
+        lineChart.getData().clear();
         lineChart.getData().add(data);
     }
 
-    //get sales of specific day
     public int getSalesOfSpecificDay(String day, String table) {
-        int sales = 0;
-        try {
-            statement = connection.createStatement();
-        } catch (SQLException e) {
-            displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-        }
-        try {
-            //get count of sales of each day
-            switch (day) {
-                case "Sun" ->
-                        resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + table + " WHERE DAYNAME(sale_date) = 'Sunday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Mon" ->
-                        resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + table + " WHERE DAYNAME(sale_date) = 'Monday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Tue" ->
-                        resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + table + " WHERE DAYNAME(sale_date) = 'Tuesday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Wed" ->
-                        resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + table + " WHERE DAYNAME(sale_date) = 'Wednesday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Thu" ->
-                        resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + table + " WHERE DAYNAME(sale_date) = 'Thursday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Fri" ->
-                        resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + table + " WHERE DAYNAME(sale_date) = 'Friday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Sat" ->
-                        resultSet = statement.executeQuery("SELECT COUNT(*) FROM " + table + " WHERE DAYNAME(sale_date) = 'Saturday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                default -> {
-                }
+        String dayName = DAY_NAME.get(day);
+        if (dayName == null) return 0;
 
-            }
-            if (resultSet.next()) {
-                sales = resultSet.getInt(1);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        String sql = "SELECT COUNT(*) FROM " + table +
+                " WHERE DAYNAME(sale_date) = ? AND WEEK(sale_date) = WEEK(CURDATE())";
 
-        return sales;
+        return queryInt(sql, dayName);
     }
 
-    //get earnings of specific day
     public int getEarningsOfSpecificDay(String day) {
-        int earnings = 0;
-        try {
-            statement = connection.createStatement();
-        } catch (SQLException e) {
-            displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-        }
-        try {
-            //get count of sales of each day
-            switch (day) {
-                case "Sun" ->
-                    //get the sum of price from both tables (animals_sales and milk_sales)
-                        resultSet = statement.executeQuery("SELECT SUM(price) FROM animals_sales WHERE DAYNAME(sale_date) = 'Sunday' AND WEEK(sale_date) = WEEK(CURDATE()) UNION SELECT SUM(price) FROM milk_sales WHERE DAYNAME(sale_date) = 'Sunday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Mon" ->
-                        resultSet = statement.executeQuery("SELECT SUM(price) FROM animals_sales WHERE DAYNAME(sale_date) = 'Monday' AND WEEK(sale_date) = WEEK(CURDATE()) UNION SELECT SUM(price) FROM milk_sales WHERE DAYNAME(sale_date) = 'Monday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Tue" ->
-                        resultSet = statement.executeQuery("SELECT SUM(price) FROM animals_sales WHERE DAYNAME(sale_date) = 'Tuesday' AND WEEK(sale_date) = WEEK(CURDATE()) UNION SELECT SUM(price) FROM milk_sales WHERE DAYNAME(sale_date) = 'Tuesday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Wed" ->
-                        resultSet = statement.executeQuery("SELECT SUM(price) FROM animals_sales WHERE DAYNAME(sale_date) = 'Wednesday' AND WEEK(sale_date) = WEEK(CURDATE()) UNION SELECT SUM(price) FROM milk_sales WHERE DAYNAME(sale_date) = 'Wednesday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Thu" ->
-                        resultSet = statement.executeQuery("SELECT SUM(price) FROM animals_sales WHERE DAYNAME(sale_date) = 'Thursday' AND WEEK(sale_date) = WEEK(CURDATE()) UNION SELECT SUM(price) FROM milk_sales WHERE DAYNAME(sale_date) = 'Thursday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Fri" ->
-                        resultSet = statement.executeQuery("SELECT SUM(price) FROM animals_sales WHERE DAYNAME(sale_date) = 'Friday' AND WEEK(sale_date) = WEEK(CURDATE()) UNION SELECT SUM(price) FROM milk_sales WHERE DAYNAME(sale_date) = 'Friday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                case "Sat" ->
-                        resultSet = statement.executeQuery("SELECT SUM(price) FROM animals_sales WHERE DAYNAME(sale_date) = 'Saturday' AND WEEK(sale_date) = WEEK(CURDATE()) UNION SELECT SUM(price) FROM milk_sales WHERE DAYNAME(sale_date) = 'Saturday' AND WEEK(sale_date) = WEEK(CURDATE())");
-                default -> {
-                }
-            }
-            if (resultSet.next()) {
-                earnings = resultSet.getInt(1);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        String dayName = DAY_NAME.get(day);
+        if (dayName == null) return 0;
 
-        return earnings;
+        String sql = "SELECT " +
+                "COALESCE((SELECT SUM(price) FROM " + TABLE_ANIMALS_SALES + " WHERE DAYNAME(sale_date)=? AND WEEK(sale_date)=WEEK(CURDATE())), 0) +" +
+                "COALESCE((SELECT SUM(price) FROM " + TABLE_MILK_SALES + " WHERE DAYNAME(sale_date)=? AND WEEK(sale_date)=WEEK(CURDATE())), 0)";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, dayName);
+            ps.setString(2, dayName);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            return 0;
+        }
+    }
+
+    private void addWeekSeries(XYChart.Series<String, Number> series, String table) {
+        addDayPoint(series, DAY_SUN, table);
+        addDayPoint(series, DAY_MON, table);
+        addDayPoint(series, DAY_TUE, table);
+        addDayPoint(series, DAY_WED, table);
+        addDayPoint(series, DAY_THU, table);
+        addDayPoint(series, DAY_FRI, table);
+        addDayPoint(series, DAY_SAT, table);
+    }
+
+    private void addDayPoint(XYChart.Series<String, Number> series, String day, String table) {
+        series.getData().add(new XYChart.Data<>(day, getSalesOfSpecificDay(day, table)));
+    }
+
+    private void addWeekEarningsSeries(XYChart.Series<String, Number> series) {
+        addEarningPoint(series, DAY_SUN);
+        addEarningPoint(series, DAY_MON);
+        addEarningPoint(series, DAY_TUE);
+        addEarningPoint(series, DAY_WED);
+        addEarningPoint(series, DAY_THU);
+        addEarningPoint(series, DAY_FRI);
+        addEarningPoint(series, DAY_SAT);
+    }
+
+    private void addEarningPoint(XYChart.Series<String, Number> series, String day) {
+        series.getData().add(new XYChart.Data<>(day, getEarningsOfSpecificDay(day)));
+    }
+
+    private int countAll(String table) throws SQLException {
+        try (ResultSet rs = executeQuery(COUNT_SQL_PREFIX + table)) {
+            return rs.next() ? rs.getInt(1) : 0;
+        }
+    }
+
+    private int countAnimalsOfType(String type) throws SQLException {
+        String sql = COUNT_SQL_PREFIX + TABLE_ANIMALS + " WHERE type = ?";
+        return queryInt(sql, type);
+    }
+
+    private int countTodaySales(String table) throws SQLException {
+        String sql = COUNT_SQL_PREFIX + table + " WHERE sale_date = CURDATE()";
+        return queryInt(sql);
+    }
+
+    private int sumTodayPrice(String table) throws SQLException {
+        String sql = SQL_SUM_PRICE + table + " WHERE sale_date = CURDATE()";
+        try (ResultSet rs = executeQuery(sql)) {
+            if (!rs.next()) return 0;
+            int v = rs.getInt(1);
+            return rs.wasNull() ? 0 : v;
+        }
+    }
+
+    private int queryInt(String sql, String... params) {
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (int i = 0; i < params.length; i++) {
+                ps.setString(i + 1, params[i]);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            return 0;
+        }
     }
 }
