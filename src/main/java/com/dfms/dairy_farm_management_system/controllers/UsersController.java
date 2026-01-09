@@ -1,7 +1,6 @@
 package com.dfms.dairy_farm_management_system.controllers;
 
 import com.dfms.dairy_farm_management_system.Main;
-import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.EmployeeDetailsController;
 import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.UpdateEmployeeController;
 import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.UpdateUserController;
 import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.UserDetailsController;
@@ -48,76 +47,61 @@ import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConne
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
 public class UsersController implements Initializable {
+
     private static final String ICON_STYLE = "-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;";
     private static final String ERROR_TITLE = "Error";
-
     private static final int COLUMNS_COUNT = 9;
+
+    private static final String APP_ICON_PATH = "file:src/main/resources/images/logo.png";
+    private static final String UPDATE_USER_FXML = "/com/dfms/dairy_farm_management_system/popups/update_user.fxml";
+    private static final String USER_DETAILS_FXML = "/com/dfms/dairy_farm_management_system/popups/user_details.fxml";
+
+    private static final Image EDIT_IMG = new Image(UsersController.class.getResourceAsStream("/images/edit.png"));
+    private static final Image DELETE_IMG = new Image(UsersController.class.getResourceAsStream("/images/delete.png"));
+    private static final Image VIEW_IMG = new Image(UsersController.class.getResourceAsStream("/images/eye.png"));
+
+    private PreparedStatement preparedStatement;
+    private final Connection connection = getConnection();
+
+    @FXML private TableView<User> users_table;
+    @FXML private TableColumn<User, String> actions_col;
+    @FXML private TableColumn<User, String> col_id;
+    @FXML private TableColumn<User, String> email_col;
+    @FXML private TableColumn<User, String> first_name_col;
+    @FXML private TableColumn<User, String> last_name_col;
+    @FXML private TableColumn<User, String> role_col;
+    @FXML private Button search_btn;
+    @FXML private TextField search_user_input;
+    @FXML private ComboBox<String> export_combo;
+    @FXML private Button openAddNewEmployeeBtn;
+    @FXML private Button new_role_btn;
 
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
-        //this line of code is so important for the export !!!!
+        // Important for export
         BasicConfigurator.configure();
 
         ObservableList<String> list = FXCollections.observableArrayList("PDF", "Excel");
         export_combo.setItems(list);
+
         displayUsers();
         liveSearch(search_user_input, users_table);
 
-        //check what user select in the combo box
         export_combo.getSelectionModel().selectedItemProperty().addListener((observableValue, s, t1) -> {
-            if (t1.equals("PDF")) {
-                exportToPDF();
-            } else {
-                exportToExcel();
-            }
+            if (t1 == null) return;
+            if ("PDF".equals(t1)) exportToPDF();
+            else exportToExcel();
         });
     }
 
-    private PreparedStatement preparedStatement;
-    private Connection connection = getConnection();
-
-    @FXML
-    private TableView<User> users_table;
-
-    @FXML
-    private TableColumn<User, String> actions_col;
-
-    @FXML
-    private TableColumn<User, String> col_id;
-
-    @FXML
-    private TableColumn<User, String> email_col;
-
-    @FXML
-    private TableColumn<User, String> first_name_col;
-
-    @FXML
-    private TableColumn<User, String> last_name_col;
-
-    @FXML
-    private TableColumn<User, String> role_col;
-
-    @FXML
-    private Button search_btn;
-
-    @FXML
-    private TextField search_user_input;
-    @FXML
-    private ComboBox<String> export_combo;
-
-    @FXML
-    private Button openAddNewEmployeeBtn;
-    @FXML
-    private Button new_role_btn;
-
-    //get all the employees
+    // ========================= DATA =========================
     public ObservableList<User> getUsers() {
         ObservableList<User> list = FXCollections.observableArrayList();
         String query = "SELECT id, first_name, last_name, cin, email, gender, phone, salary, address, role, created_at FROM `users`";
 
-        try {
-            Statement statement = connection.createStatement();
-            ResultSet resultSet = statement.executeQuery(query);
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(query)) {
+
             while (resultSet.next()) {
                 User user = new User();
                 user.setId(resultSet.getInt("id"));
@@ -135,142 +119,122 @@ public class UsersController implements Initializable {
             }
         } catch (Exception e) {
             displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-
         }
+
         return list;
     }
 
-    //display all the employees in the table
+    // ========================= TABLE =========================
     public void displayUsers() {
         ObservableList<User> users = getUsers();
+
         col_id.setCellValueFactory(new PropertyValueFactory<>("id"));
         first_name_col.setCellValueFactory(new PropertyValueFactory<>("firstName"));
         last_name_col.setCellValueFactory(new PropertyValueFactory<>("lastName"));
         email_col.setCellValueFactory(new PropertyValueFactory<>("email"));
         role_col.setCellValueFactory(new PropertyValueFactory<>("roleName"));
-        Callback<TableColumn<User, String>, TableCell<User, String>> cellFoctory = (TableColumn<User, String> param) -> {
-            final TableCell<User, String> cell = new TableCell<User, String>() {
-                Image edit_img = new Image(getClass().getResourceAsStream("/images/edit.png"));
-                Image delete_img = new Image(getClass().getResourceAsStream("/images/delete.png"));
-                Image view_details_img = new Image(getClass().getResourceAsStream("/images/eye.png"));
 
-                Button edit_btn = new Button();
-                Button delete_btn = new Button();
-                Button view_details_btn = new Button();
-
-                @Override
-                protected void updateItem(String item, boolean empty) {
-                    super.updateItem(item, empty);
-                    //that cell created only on non-empty rows
-                    if (empty) {
-                        setGraphic(null);
-                        setText(null);
-                    } else {
-                        ImageView iv_view_details = new ImageView();
-                        iv_view_details.setImage(view_details_img);
-                        iv_view_details.setPreserveRatio(true);
-                        iv_view_details.setSmooth(true);
-                        iv_view_details.setCache(true);
-
-                        view_details_btn.setGraphic(iv_view_details);
-                        view_details_btn.setStyle(ICON_STYLE);
-
-                        ImageView iv_edit = new ImageView();
-                        iv_edit.setImage(edit_img);
-                        iv_edit.setPreserveRatio(true);
-                        iv_edit.setSmooth(true);
-                        iv_edit.setCache(true);
-
-                        edit_btn.setGraphic(iv_edit);
-                        edit_btn.setStyle(ICON_STYLE);
-
-                        ImageView iv_delete = new ImageView();
-                        iv_delete.setImage(delete_img);
-                        iv_delete.setPreserveRatio(true);
-                        iv_delete.setSmooth(true);
-                        iv_delete.setCache(true);
-
-                        delete_btn.setGraphic(iv_delete);
-                        delete_btn.setStyle(ICON_STYLE);
-
-                        HBox managebtn = new HBox(view_details_btn, edit_btn, delete_btn);
-                        managebtn.setStyle("-fx-alignment:center");
-                        HBox.setMargin(iv_view_details, new Insets(1, 1, 0, 3));
-                        HBox.setMargin(iv_delete, new Insets(1, 1, 0, 3));
-                        HBox.setMargin(iv_edit, new Insets(1, 1, 0, 3));
-
-                        setGraphic(managebtn);
-
-                        //delete user
-                        delete_btn.setOnMouseClicked((MouseEvent event) -> {
-                            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                            alert.setTitle("Delete user");
-                            alert.setHeaderText("Are you sure you want to delete this user?");
-                            User user = users.get(getRowIndex(event));
-                            Optional<ButtonType> result = alert.showAndWait();
-                            if (result.get() == ButtonType.OK) {
-                                try {
-                                    user.delete();
-                                    displayUsers();
-                                } catch (Exception e) {
-                                    displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-
-                                }
-                            }
-                        });
-
-                        //update user
-                        edit_btn.setOnMouseClicked((MouseEvent event) -> {
-                            User user = users.get(getRowIndex(event));
-                            FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/update_user.fxml"));
-                            Scene scene = null;
-                            try {
-                                scene = new Scene(fxmlLoader.load());
-                                UpdateUserController controller = fxmlLoader.getController();
-                                controller.initData(user);
-                            } catch (IOException e) {
-                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-
-                                e.printStackTrace();
-                            }
-                            Stage stage = new Stage();
-                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
-                            stage.setTitle("Update Employee");
-                            stage.setResizable(false);
-                            stage.setScene(scene);
-                            centerScreen(stage);
-                            stage.show();
-                        });
-
-                        //view employee details
-                        view_details_btn.setOnMouseClicked((MouseEvent event) -> {
-                            User user = users.get(getRowIndex(event));
-                            FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/user_details.fxml"));
-                            Scene scene = null;
-                            try {
-                                scene = new Scene(fxmlLoader.load());
-                                UserDetailsController controller = fxmlLoader.getController();
-                                controller.initData(user);
-                            } catch (IOException e) {
-                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-
-                                e.printStackTrace();
-                            }
-                            Stage stage = new Stage();
-                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
-                            stage.setTitle("Employee Details");
-                            stage.setResizable(false);
-                            stage.setScene(scene);
-                            centerScreen(stage);
-                            stage.show();
-                        });
-                    }
-                }
-            };
-            return cell;
-        };
-        actions_col.setCellFactory(cellFoctory);
+        actions_col.setCellFactory(createActionsFactory(users));
         users_table.setItems(users);
+    }
+
+    private Callback<TableColumn<User, String>, TableCell<User, String>> createActionsFactory(ObservableList<User> users) {
+        return (TableColumn<User, String> param) -> new TableCell<>() {
+
+            private final Button edit_btn = iconButton(EDIT_IMG);
+            private final Button delete_btn = iconButton(DELETE_IMG);
+            private final Button view_details_btn = iconButton(VIEW_IMG);
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+
+                if (empty) {
+                    setGraphic(null);
+                    setText(null);
+                    return;
+                }
+
+                HBox managebtn = new HBox(view_details_btn, edit_btn, delete_btn);
+                managebtn.setStyle("-fx-alignment:center");
+                setMargins(managebtn);
+
+                setGraphic(managebtn);
+                setText(null);
+
+                delete_btn.setOnMouseClicked((MouseEvent event) -> {
+                    User user = users.get(getRowIndex(event));
+                    if (confirmDelete("Delete user", "Are you sure you want to delete this user?")) {
+                        try {
+                            user.delete();
+                            displayUsers();
+                        } catch (Exception e) {
+                            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+                        }
+                    }
+                });
+
+                edit_btn.setOnMouseClicked((MouseEvent event) -> {
+                    User user = users.get(getRowIndex(event));
+                    openPopupWithUser(UPDATE_USER_FXML, "Update Employee", user, (UpdateUserController c) -> c.initData(user));
+                });
+
+                view_details_btn.setOnMouseClicked((MouseEvent event) -> {
+                    User user = users.get(getRowIndex(event));
+                    openPopupWithUser(USER_DETAILS_FXML, "Employee Details", user, (UserDetailsController c) -> c.initData(user));
+                });
+            }
+        };
+    }
+
+    private Button iconButton(Image img) {
+        ImageView iv = new ImageView(img);
+        iv.setPreserveRatio(true);
+        iv.setSmooth(true);
+        iv.setCache(true);
+
+        Button btn = new Button();
+        btn.setGraphic(iv);
+        btn.setStyle(ICON_STYLE);
+        return btn;
+    }
+
+    private void setMargins(HBox managebtn) {
+        for (javafx.scene.Node n : managebtn.getChildren()) {
+            HBox.setMargin(n, new Insets(1, 1, 0, 3));
+        }
+    }
+
+    private boolean confirmDelete(String title, String header) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        Optional<ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == ButtonType.OK;
+    }
+
+    private <T> void openPopupWithUser(String fxmlPath, String title, User user, ControllerInit<T> initializer) {
+        FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource(fxmlPath));
+        try {
+            Scene scene = new Scene(fxmlLoader.load());
+            T controller = fxmlLoader.getController();
+            initializer.init(controller);
+
+            Stage stage = new Stage();
+            stage.getIcons().add(new Image(APP_ICON_PATH));
+            stage.setTitle(title);
+            stage.setResizable(false);
+            stage.setScene(scene);
+            centerScreen(stage);
+            stage.show();
+        } catch (IOException e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+    @FunctionalInterface
+    private interface ControllerInit<T> {
+        void init(T controller);
     }
 
     public void openAddUser() throws IOException {
@@ -287,16 +251,21 @@ public class UsersController implements Initializable {
         search_input.textProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue == null || newValue.isEmpty()) {
                 refreshTable();
-            } else {
-                ObservableList<User> filteredList = FXCollections.observableArrayList();
-                ObservableList<User> users = getUsers();
-                for (User user : users) {
-                    if (user.getFirstName().toLowerCase().contains(newValue.toLowerCase()) || user.getLastName().toLowerCase().contains(newValue.toLowerCase())) {
-                        filteredList.add(user);
-                    }
-                }
-                table.setItems(filteredList);
+                return;
             }
+
+            ObservableList<User> filteredList = FXCollections.observableArrayList();
+            ObservableList<User> users = getUsers();
+
+            String needle = newValue.toLowerCase();
+            for (User user : users) {
+                String fn = user.getFirstName() == null ? "" : user.getFirstName().toLowerCase();
+                String ln = user.getLastName() == null ? "" : user.getLastName().toLowerCase();
+                if (fn.contains(needle) || ln.contains(needle)) {
+                    filteredList.add(user);
+                }
+            }
+            table.setItems(filteredList);
         });
     }
 
@@ -305,6 +274,7 @@ public class UsersController implements Initializable {
         liveSearch(this.search_user_input, users_table);
     }
 
+    // ========================= EXPORT EXCEL =========================
     void exportToExcel() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
@@ -314,148 +284,121 @@ public class UsersController implements Initializable {
         );
 
         File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try (
-                    Workbook workbook = new XSSFWorkbook();
-                    FileOutputStream fileOutputStream = new FileOutputStream(file)
-            ) {
-                Sheet sheet = workbook.createSheet("Employees");
-                Row header = sheet.createRow(1);
-                header.createCell(1).setCellValue("First Name");
-                header.createCell(2).setCellValue("Last Name");
-                header.createCell(3).setCellValue("Email");
-                header.createCell(4).setCellValue("Phone");
-                header.createCell(5).setCellValue("Address");
-                header.createCell(6).setCellValue("CIN");
-                header.createCell(7).setCellValue("Gender");
-                header.createCell(8).setCellValue("Salary");
+        if (file == null) return;
 
-                // get users displayed in table
-                ObservableList<User> users = users_table.getItems();
+        try (Workbook workbook = new XSSFWorkbook();
+             FileOutputStream fileOutputStream = new FileOutputStream(file)) {
 
-                // get employee of each row
-                UpdateEmployeeController controller = new UpdateEmployeeController();
+            Sheet sheet = workbook.createSheet("Employees");
 
-                for (Employee employee : users) {
-                    Employee emp = controller.getEmployee(employee.getCin());
-                    Row row = sheet.createRow(sheet.getLastRowNum() + 1);
-                    row.createCell(1).setCellValue(emp.getFirstName());
-                    row.createCell(2).setCellValue(emp.getLastName());
-                    row.createCell(3).setCellValue(emp.getEmail());
-                    row.createCell(4).setCellValue(emp.getPhone());
-                    row.createCell(5).setCellValue(emp.getAddress());
-                    row.createCell(6).setCellValue(emp.getCin());
-                    if (emp.getGender().equals("M")) {
-                        row.createCell(7).setCellValue("Male");
-                    } else {
-                        row.createCell(7).setCellValue("Female");
-                    }
-                    row.createCell(8).setCellValue(String.valueOf(emp.getSalary()));
-                }
+            Row header = sheet.createRow(1);
+            header.createCell(1).setCellValue("First Name");
+            header.createCell(2).setCellValue("Last Name");
+            header.createCell(3).setCellValue("Email");
+            header.createCell(4).setCellValue("Phone");
+            header.createCell(5).setCellValue("Address");
+            header.createCell(6).setCellValue("CIN");
+            header.createCell(7).setCellValue("Gender");
+            header.createCell(8).setCellValue("Salary");
 
-                workbook.write(fileOutputStream);
-                displayAlert("Success", "Employees exported successfully", Alert.AlertType.INFORMATION);
+            ObservableList<User> users = users_table.getItems();
+            UpdateEmployeeController controller = new UpdateEmployeeController();
 
-            } catch (Exception e) {
-                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            for (User user : users) {
+                Employee emp = controller.getEmployee(user.getCin());
+                if (emp == null) continue;
 
+                Row row = sheet.createRow(sheet.getLastRowNum() + 1);
+                row.createCell(1).setCellValue(emp.getFirstName());
+                row.createCell(2).setCellValue(emp.getLastName());
+                row.createCell(3).setCellValue(emp.getEmail());
+                row.createCell(4).setCellValue(emp.getPhone());
+                row.createCell(5).setCellValue(emp.getAddress());
+                row.createCell(6).setCellValue(emp.getCin());
+                row.createCell(7).setCellValue("M".equals(emp.getGender()) ? "Male" : "Female");
+                row.createCell(8).setCellValue(String.valueOf(emp.getSalary()));
             }
+
+            workbook.write(fileOutputStream);
+            displayAlert("Success", "Employees exported successfully", Alert.AlertType.INFORMATION);
+
+        } catch (Exception e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
     }
 
-
+    // ========================= EXPORT PDF =========================
     void exportToPDF() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
         fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
         File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try {
-                Document document = new Document();
+        if (file == null) return;
 
-                //change document orientation to landscape
-                document.setPageSize(PageSize.A4.rotate());
+        try {
+            Document document = new Document();
+            document.setPageSize(PageSize.A4.rotate());
 
-                PdfWriter.getInstance(document, new FileOutputStream(file));
-                document.open();
-                try {
-                    Paragraph title = new Paragraph("Employees List", FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK));
-                    Paragraph text = new Paragraph("This is the list of the users", FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK));
+            PdfWriter.getInstance(document, new FileOutputStream(file));
+            document.open();
 
-                    //center paragraph
-                    title.setAlignment(Element.ALIGN_CENTER);
-                    text.setAlignment(Element.ALIGN_CENTER);
-                    title.setSpacingAfter(30);
-                    text.setSpacingAfter(30);
+            Paragraph title = new Paragraph("Employees List",
+                    FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK));
+            Paragraph text = new Paragraph("This is the list of the users",
+                    FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK));
 
-                    document.add(title);
-                    document.add(text);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            title.setAlignment(Element.ALIGN_CENTER);
+            text.setAlignment(Element.ALIGN_CENTER);
+            title.setSpacingAfter(30);
+            text.setSpacingAfter(30);
 
-                }
-                PdfPTable table = new PdfPTable(COLUMNS_COUNT);
+            document.add(title);
+            document.add(text);
 
-                //change pdf orientation to landscape
-                table.setWidthPercentage(100);
-                table.setSpacingBefore(11f);
-                table.setSpacingAfter(11f);
-                float[] colWidth = new float[COLUMNS_COUNT];
-                for (int i = 0; i < COLUMNS_COUNT; i++) {
-                    colWidth[i] = 2f;
-                }
+            PdfPTable table = new PdfPTable(COLUMNS_COUNT);
+            table.setWidthPercentage(100);
+            table.setSpacingBefore(11f);
+            table.setSpacingAfter(11f);
 
-                //add table header
-                table.addCell(new PdfPCell(new Paragraph("First Name", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Last Name", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Email", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Phone", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Address", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("CIN", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Gender", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Hire Date", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Salary", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+            addPdfHeader(table);
 
-                //add padding to cells
-                table.getDefaultCell().setPadding(3);
-                table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
+            ObservableList<User> users = users_table.getItems();
+            UpdateEmployeeController controller = new UpdateEmployeeController();
 
+            for (User user : users) {
+                Employee emp = controller.getEmployee(user.getCin());
+                if (emp == null) continue;
 
-                //get users displayed in table
-                ObservableList<User> users = users_table.getItems();
-
-                //get employee of each row
-                //used a method in my updateEmplyeeController to get the employee of each row based on the cin
-                UpdateEmployeeController controller = new UpdateEmployeeController();
-
-                for (Employee employee : users) {
-                    Employee emp = controller.getEmployee(employee.getCin());
-
-                    table.addCell(new PdfPCell(new Paragraph(emp.getFirstName()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(emp.getLastName()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(emp.getEmail()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(emp.getPhone()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(emp.getAddress()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(emp.getCin()))).setPadding(5);
-                    if (emp.getGender().equals("M")) {
-                        table.addCell(new PdfPCell(new Paragraph("Male"))).setPadding(5);
-                    } else {
-                        table.addCell(new PdfPCell(new Paragraph("Female"))).setPadding(5);
-                    }
-                    table.addCell(new PdfPCell(new Paragraph(emp.getHireDate().toString()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(emp.getSalary())))).setPadding(5);
-                }
-
-                document.add(table);
-                document.close();
-                displayAlert("Success", "Employees exported successfully", Alert.AlertType.INFORMATION);
-            } catch (Exception e) {
-                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-
+                table.addCell(new PdfPCell(new Paragraph(emp.getFirstName()))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(emp.getLastName()))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(emp.getEmail()))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(emp.getPhone()))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(emp.getAddress()))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(emp.getCin()))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph("M".equals(emp.getGender()) ? "Male" : "Female"))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(emp.getHireDate() == null ? "" : emp.getHireDate().toString()))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(String.valueOf(emp.getSalary())))).setPadding(5);
             }
+
+            document.add(table);
+            document.close();
+            displayAlert("Success", "Employees exported successfully", Alert.AlertType.INFORMATION);
+
+        } catch (Exception e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
+    }
+
+    private void addPdfHeader(PdfPTable table) {
+        table.addCell(new PdfPCell(new Paragraph("First Name", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+        table.addCell(new PdfPCell(new Paragraph("Last Name", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+        table.addCell(new PdfPCell(new Paragraph("Email", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+        table.addCell(new PdfPCell(new Paragraph("Phone", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+        table.addCell(new PdfPCell(new Paragraph("Address", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+        table.addCell(new PdfPCell(new Paragraph("CIN", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+        table.addCell(new PdfPCell(new Paragraph("Gender", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+        table.addCell(new PdfPCell(new Paragraph("Hire Date", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+        table.addCell(new PdfPCell(new Paragraph("Salary", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
     }
 
     @FXML
