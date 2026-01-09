@@ -27,6 +27,8 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.Image;
+import javafx.scene.input.MouseEvent;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.Callback;
@@ -40,7 +42,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URL;
 import java.sql.Connection;
-import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -54,6 +55,7 @@ import static com.dfms.dairy_farm_management_system.helpers.Helper.openNewWindow
 public class ManageAnimalController implements Initializable {
 
     private static final String APP_ICON_PATH = "file:src/main/resources/images/logo.png";
+    private static final Image APP_ICON = new Image(APP_ICON_PATH);
     private static final String ERROR_TITLE = "Error";
 
     private static final String PROP_ID = "id";
@@ -65,16 +67,29 @@ public class ManageAnimalController implements Initializable {
     private static final String OPT_PDF = "PDF";
     private static final String OPT_EXCEL = "Excel";
 
+    private static final String PDF_DESC = "PDF Files";
+    private static final String PDF_GLOB = "*.pdf";
+    private static final String XLSX_DESC = "Excel Files";
+    private static final String XLSX_GLOB = "*.xlsx";
+    private static final String CSV_DESC = "CSV Files";
+    private static final String CSV_GLOB = "*.csv";
+
+    private static final String TITLE_ANIMAL_LIST = "Animal List";
+    private static final String SHEET_ANIMALS = "Animals";
+
     private static final String[] COL_TITLES = {"Cow ID", "Race", "Birth Date", "Type", "Routine", "Purchase Date"};
 
     @FXML private TableView<Animal> animals;
     @FXML private TableColumn<Animal, String> colid;
     @FXML private TableColumn<Animal, String> coltype;
     @FXML private TableColumn<Animal, String> colrace;
-    @FXML private TableColumn<Animal, Date> colbirth;
+    @FXML private TableColumn<Animal, java.sql.Date> colbirth;
     @FXML private TableColumn<Animal, String> colroutine;
     @FXML private TableColumn<Animal, String> colactions;
+
+    @SuppressWarnings("java:S116")
     @FXML private ComboBox<String> export_combo;
+
     @FXML private TextField textField_search;
 
     private final ObservableList<Animal> masterAnimals = FXCollections.observableArrayList();
@@ -108,17 +123,18 @@ public class ManageAnimalController implements Initializable {
 
         textField_search.textProperty().addListener((obs, oldV, newV) -> {
             String key = normalize(newV);
-            filtered.setPredicate(a -> {
-                if (key.isEmpty()) return true;
-                return normalize(a.getType()).contains(key)
-                        || normalize(a.getRaceName()).contains(key)
-                        || normalize(a.getId()).contains(key);
-            });
+            filtered.setPredicate(a -> key.isEmpty() || matches(a, key));
         });
 
         SortedList<Animal> sorted = new SortedList<>(filtered);
         sorted.comparatorProperty().bind(animals.comparatorProperty());
         animals.setItems(sorted);
+    }
+
+    private boolean matches(Animal a, String key) {
+        return normalize(a == null ? null : a.getType()).contains(key)
+                || normalize(a == null ? null : a.getRaceName()).contains(key)
+                || normalize(a == null ? null : a.getId()).contains(key);
     }
 
     private String normalize(String s) {
@@ -156,7 +172,7 @@ public class ManageAnimalController implements Initializable {
     }
 
     @FXML
-    public void refreshTable(javafx.scene.input.MouseEvent mouseEvent) {
+    public void refreshTable(MouseEvent mouseEvent) {
         refreshTableAnimal();
     }
 
@@ -178,15 +194,15 @@ public class ManageAnimalController implements Initializable {
 
                 MenuButton btn = new MenuButton("Actions", null, view, edit, del);
 
-                view.setOnAction(e -> openDetails(getRowAnimal()));
-                edit.setOnAction(e -> openEdit(getRowAnimal()));
-                del.setOnAction(e -> deleteAnimal(getRowAnimal()));
+                view.setOnAction(e -> openDetails(rowAnimal()));
+                edit.setOnAction(e -> openEdit(rowAnimal()));
+                del.setOnAction(e -> deleteAnimal(rowAnimal()));
 
                 setGraphic(btn);
                 setText(null);
             }
 
-            private Animal getRowAnimal() {
+            private Animal rowAnimal() {
                 int i = getIndex();
                 if (i < 0 || i >= getTableView().getItems().size()) return null;
                 return getTableView().getItems().get(i);
@@ -225,12 +241,7 @@ public class ManageAnimalController implements Initializable {
             AnimalDetailsController c = loader.getController();
             c.fetchAnimal(a.getId(), a.getRaceName(), a.getBirth_date(), a.getRoutineName(), a.getPurchase_date(), a.getType());
 
-            Stage stage = new Stage();
-            stage.getIcons().add(new javafx.scene.image.Image(APP_ICON_PATH));
-            stage.setTitle("Animal Details");
-            stage.setResizable(false);
-            stage.setScene(scene);
-            centerScreen(stage);
+            Stage stage = buildStage("Animal Details", scene);
             stage.show();
         } catch (IOException e) {
             displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
@@ -254,16 +265,21 @@ public class ManageAnimalController implements Initializable {
                     a.getType()
             );
 
-            Stage stage = new Stage();
-            stage.getIcons().add(new javafx.scene.image.Image(APP_ICON_PATH));
-            stage.setTitle("Update Animal");
-            stage.setResizable(false);
-            stage.setScene(scene);
-            centerScreen(stage);
+            Stage stage = buildStage("Update Animal", scene);
             stage.show();
         } catch (IOException e) {
             displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
+    }
+
+    private Stage buildStage(String title, Scene scene) {
+        Stage stage = new Stage();
+        stage.getIcons().add(APP_ICON);
+        stage.setTitle(title);
+        stage.setResizable(false);
+        stage.setScene(scene);
+        centerScreen(stage);
+        return stage;
     }
 
     @FXML
@@ -277,10 +293,7 @@ public class ManageAnimalController implements Initializable {
     }
 
     void exportToPDF() {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Save As");
-        chooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
-        File file = chooser.showSaveDialog(null);
+        File file = pickFile(PDF_DESC, PDF_GLOB);
         if (file == null) return;
 
         try {
@@ -288,15 +301,14 @@ public class ManageAnimalController implements Initializable {
             PdfWriter.getInstance(doc, new FileOutputStream(file));
             doc.open();
 
-            doc.add(new Paragraph("Animal List"));
+            doc.add(new Paragraph(TITLE_ANIMAL_LIST));
             doc.add(new Paragraph(" "));
 
             PdfPTable table = new PdfPTable(COL_TITLES.length);
-            writeHeadersPdf(table);
+            writeHeaderCells(table, COL_TITLES);
 
             for (Animal a : animals.getItems()) {
-                String[] row = toRow(a);
-                for (String v : row) table.addCell(v);
+                writeRowCells(table, rowValues(a));
             }
 
             doc.add(table);
@@ -309,27 +321,22 @@ public class ManageAnimalController implements Initializable {
     }
 
     void exportToExcel() {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Save As");
-        chooser.getExtensionFilters().addAll(
-                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"),
-                new FileChooser.ExtensionFilter("CSV Files", "*.csv")
-        );
-
-        File file = chooser.showSaveDialog(null);
+        File file = pickFile(XLSX_DESC, XLSX_GLOB, CSV_DESC, CSV_GLOB);
         if (file == null) return;
 
         try (Workbook wb = new XSSFWorkbook();
              FileOutputStream out = new FileOutputStream(file)) {
 
-            Sheet sheet = wb.createSheet("Animals");
-            writeHeadersExcel(sheet);
+            Sheet sheet = wb.createSheet(SHEET_ANIMALS);
+            writeSheetHeader(sheet, COL_TITLES);
 
             int rowIndex = 1;
             for (Animal a : animals.getItems()) {
                 Row r = sheet.createRow(rowIndex++);
-                String[] data = toRow(a);
-                for (int i = 0; i < data.length; i++) r.createCell(i).setCellValue(data[i]);
+                String[] data = rowValues(a);
+                for (int i = 0; i < data.length; i++) {
+                    r.createCell(i).setCellValue(data[i]);
+                }
             }
 
             wb.write(out);
@@ -339,16 +346,43 @@ public class ManageAnimalController implements Initializable {
         }
     }
 
-    private void writeHeadersPdf(PdfPTable table) {
-        for (String h : COL_TITLES) table.addCell(h);
+    private File pickFile(String desc1, String glob1) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Save As");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(desc1, glob1));
+        return chooser.showSaveDialog(null);
     }
 
-    private void writeHeadersExcel(Sheet sheet) {
+    private File pickFile(String desc1, String glob1, String desc2, String glob2) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Save As");
+        chooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter(desc1, glob1),
+                new FileChooser.ExtensionFilter(desc2, glob2)
+        );
+        return chooser.showSaveDialog(null);
+    }
+
+    private void writeSheetHeader(Sheet sheet, String[] headers) {
         Row head = sheet.createRow(0);
-        for (int i = 0; i < COL_TITLES.length; i++) head.createCell(i).setCellValue(COL_TITLES[i]);
+        for (int i = 0; i < headers.length; i++) {
+            head.createCell(i).setCellValue(headers[i]);
+        }
     }
 
-    private String[] toRow(Animal a) {
+    private void writeHeaderCells(PdfPTable table, String[] headers) {
+        for (String h : headers) {
+            table.addCell(h);
+        }
+    }
+
+    private void writeRowCells(PdfPTable table, String[] values) {
+        for (String v : values) {
+            table.addCell(v);
+        }
+    }
+
+    private String[] rowValues(Animal a) {
         return new String[]{
                 dash(a == null ? null : a.getId()),
                 dash(a == null ? null : a.getRaceName()),
