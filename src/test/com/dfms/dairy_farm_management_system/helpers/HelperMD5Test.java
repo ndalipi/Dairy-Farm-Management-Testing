@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.*;
 //Equivalence Class Testing
 class HelperMD5Test {
 
+    //Part 1
     @Test
     void testValidMatch() {
         String password = "password123";
@@ -14,6 +15,7 @@ class HelperMD5Test {
         assertTrue(Helper.MD5(hash, password));
     }
 
+    //Part 1
     @Test
     void testInvalidMatch() {
         String password = "password123";
@@ -21,6 +23,7 @@ class HelperMD5Test {
         assertFalse(Helper.MD5(wrongHash, password));
     }
 
+    //Part 1
     @Test
     void testEmptyPassword() {
         String password = "";
@@ -28,6 +31,7 @@ class HelperMD5Test {
         assertTrue(Helper.MD5(hash, password));
     }
 
+    //Part 1
     @Test
     void testUnicodePassword() {
         String password = "pässwörd✓";
@@ -35,20 +39,22 @@ class HelperMD5Test {
         assertTrue(Helper.MD5(hash, password));
     }
 
+    //Part 1
     @Test
     void testNullPassword() {
         assertThrows(NullPointerException.class, () -> Helper.MD5("anyhash", null));
     }
 
+    //Part 1
     @Test
     void testNullEncryptedPassword() {
         String password = "password123";
         assertFalse(Helper.MD5(null, password));
     }
+
+    //Part 1
     @Test
     void testEncryptedPasswordNotMd5Format() {
         assertFalse(Helper.MD5("not-a-hash", "password123"));
     }
-
-
 }
