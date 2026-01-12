@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+//Boundary Value Testing
 public class HelperEncryptPasswordTest {
 
     private static void assertValidMd5HashFor(String password) {

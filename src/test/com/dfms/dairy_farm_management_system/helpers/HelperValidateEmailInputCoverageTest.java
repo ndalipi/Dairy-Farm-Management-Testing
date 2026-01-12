@@ -37,6 +37,7 @@ class HelperValidateEmailInputCoverageTest {
             fail("Interrupted while waiting for JavaFX thread");
         }
     }
+
     @Test
     void validEmail_shouldSetTransparentBorder() {
         TextField tf = new TextField();
@@ -46,6 +47,7 @@ class HelperValidateEmailInputCoverageTest {
 
         assertEquals("-fx-border-color: transparent", tf.getStyle());
     }
+
     @Test
     void invalidEmail_shouldSetRedBorder() {
         TextField tf = new TextField();
