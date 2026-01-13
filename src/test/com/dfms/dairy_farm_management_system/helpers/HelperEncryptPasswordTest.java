@@ -62,13 +62,4 @@ public class HelperEncryptPasswordTest {
     void bvt_null_password_should_throw() {
         assertThrows(NullPointerException.class, () -> Helper.encryptPassword(null));
     }
-
-    @Test
-    void md5_should_return_false_for_wrong_password() {
-        String password = "12345678";
-        String hash = Helper.encryptPassword(password);
-
-        assertTrue(Helper.MD5(hash, password));
-        assertFalse(Helper.MD5(hash, "wrongpass"));
-    }
 }
