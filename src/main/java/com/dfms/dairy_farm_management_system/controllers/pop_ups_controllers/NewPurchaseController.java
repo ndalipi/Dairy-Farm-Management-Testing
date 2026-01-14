@@ -23,6 +23,9 @@ import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConne
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
 public class NewPurchaseController implements Initializable {
+    private static final String TITLE_SUCCESS = "success";
+    private static final String TITLE_ERROR = "Error";
+
     @FXML
     private Button add_update;
 
@@ -56,55 +59,66 @@ public class NewPurchaseController implements Initializable {
     @FXML
     void addPurchase(MouseEvent event) {
         Purchase purchase = new Purchase();
+
+        // 1) Validate (early returns)
+        if (suppliersCombo.getValue() == null ||
+                stockCombo.getValue() == null ||
+                operationDate.getValue() == null ||
+                priceOfSale.getText() == null || priceOfSale.getText().trim().isEmpty() ||
+                quantityInput.getText() == null || quantityInput.getText().trim().isEmpty()) {
+            displayAlert(TITLE_ERROR, "Please Fill all fields", Alert.AlertType.ERROR);
+            return;
+        }
+
+        float price;
+        float qty;
+        try {
+            price = Float.parseFloat(priceOfSale.getText().trim());
+            qty = Float.parseFloat(quantityInput.getText().trim());
+        } catch (NumberFormatException e) {
+            displayAlert(TITLE_ERROR, "Price and Quantity must be valid numbers", Alert.AlertType.ERROR);
+            return;
+        }
+
+        if (price <= 0) {
+            displayAlert(TITLE_ERROR, "Price can't be null", Alert.AlertType.ERROR);
+            return;
+        }
+
+        if (qty <= 0) {
+            displayAlert(TITLE_ERROR, "Quantity can't be null", Alert.AlertType.ERROR);
+            return;
+        }
+
+        // 2) Fill purchase from form
+        purchase.setStock_id(stocks.get(stockCombo.getValue()));
+        purchase.setPrice(price);
+        purchase.setQuantity(qty);
+        purchase.setSupplier_id(suppliers.get(suppliersCombo.getValue()));
+        purchase.setPurchase_date(Date.valueOf(operationDate.getValue()));
+
+        // 3) Save / update
         if (this.update) {
+            purchase.setId(this.Purchase_ID);
 
             if (purchase.update()) {
-
-                if (suppliersCombo.getValue() == null || stockCombo.getValue() == null || priceOfSale.getText().isEmpty() || quantityInput.getText().isEmpty() || operationDate.getValue() == null) {
-                    displayAlert("Error", "Please Fill all fields ", Alert.AlertType.ERROR);
-                } else if (Float.parseFloat(priceOfSale.getText()) == 0) {
-                    displayAlert("Error", "Price can't be null ", Alert.AlertType.ERROR);
-                } else if (Float.parseFloat(quantityInput.getText()) == 0) {
-                    displayAlert("Error", "Quantity can't be null ", Alert.AlertType.ERROR);
-                } else {
-                    purchase.setId(this.Purchase_ID);
-                    purchase.setStock_id(stocks.get(stockCombo.getValue()));
-                    purchase.setPrice(Float.parseFloat(priceOfSale.getText()));
-                    purchase.setQuantity(Float.parseFloat(quantityInput.getText()));
-                    purchase.setSupplier_id(suppliers.get(suppliersCombo.getValue()));
-                    purchase.setPurchase_date(Date.valueOf(operationDate.getValue()));
-                    clear();
-                    closePopUp(event);
-                    displayAlert("success", "Purchase  Updated successfully", Alert.AlertType.INFORMATION);
-
-                }
-            }
-        } else {
-
-            if (suppliersCombo.getValue() == null || suppliersCombo.getValue() == null || priceOfSale.getText().isEmpty() || quantityInput.getText().isEmpty() || operationDate.getValue() == null) {
-                displayAlert("Error", "Please Fill all fields ", Alert.AlertType.ERROR);
-            } else if (Float.parseFloat(priceOfSale.getText()) == 0) {
-                displayAlert("Error", "Price can't be null ", Alert.AlertType.ERROR);
-            } else if (Float.parseFloat(quantityInput.getText()) == 0) {
-                displayAlert("Error", "Quantity can't be null ", Alert.AlertType.ERROR);
+                clear();
+                closePopUp(event);
+                displayAlert(TITLE_SUCCESS, "Purchase Updated successfully", Alert.AlertType.INFORMATION);
             } else {
-
-                purchase.setStock_id(stocks.get(stockCombo.getValue()));
-                purchase.setPrice(Float.parseFloat(priceOfSale.getText()));
-                purchase.setQuantity(Float.parseFloat(quantityInput.getText()));
-                purchase.setSupplier_id(suppliers.get(suppliersCombo.getValue()));
-                purchase.setPurchase_date(Date.valueOf(operationDate.getValue()));
-                if (purchase.save()) {
-                    closePopUp(event);
-                    displayAlert("success", "Purchase added successfully", Alert.AlertType.INFORMATION);
-
-                } else {
-                    displayAlert("Error", "Error while saving!!!", Alert.AlertType.ERROR);
-                }
-
+                displayAlert(TITLE_ERROR, "Error while updating!!!", Alert.AlertType.ERROR);
             }
+            return;
+        }
+
+        if (purchase.save()) {
+            closePopUp(event);
+            displayAlert(TITLE_SUCCESS, "Purchase added successfully", Alert.AlertType.INFORMATION);
+        } else {
+            displayAlert(TITLE_ERROR, "Error while saving!!!", Alert.AlertType.ERROR);
         }
     }
+
 
     private void clear() {
         stockCombo.getSelectionModel().clearSelection();
@@ -120,14 +134,13 @@ public class NewPurchaseController implements Initializable {
 
         try {
             this.setSupplierList();
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-        try {
             this.setProuctsList();
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            displayAlert(TITLE_ERROR,
+                    "Error while loading data: " + e.getMessage(),
+                    Alert.AlertType.ERROR);
         }
+
         validateDecimalInput(priceOfSale);
         validateDecimalInput(quantityInput);
     }
@@ -186,24 +199,13 @@ public class NewPurchaseController implements Initializable {
             purchase.setQuantity(Float.parseFloat(quantityInput.getText()));
             purchase.setPurchase_date(Date.valueOf(operationDate.getValue()));
             if (purchase.update()) {
-                displayAlert("success", "Purchase Updated successfully", Alert.AlertType.INFORMATION);
+                displayAlert(TITLE_SUCCESS, "Purchase Updated successfully", Alert.AlertType.INFORMATION);
                 closePopUp(event);
             } else {
-                displayAlert("Error", "Error while updating!!!", Alert.AlertType.ERROR);
+                displayAlert(TITLE_ERROR, "Error while updating!!!", Alert.AlertType.ERROR);
             }
         });
     }
-////        animal = getAnimal(AnimalDetailsController.id_animal);
-//        this.Purchase_ID = ID;
-//        header.setText("Update Purchase num :  " + ID);
-//        stockCombo.setValue(typeProduct + "");
-//        suppliersCombo.setValue(supplier + "");
-//        priceOfSale.setText(price + "");
-//        quantityInput.setText(quantity + "");
-//        operationDate.setValue(LocalDate.parse(operationdate + ""));
-//        key.setText("Update");
-//        add_update.setText("Update");
-//    }
 
     @FXML
     void openAddProduct(MouseEvent event) throws IOException {
@@ -215,29 +217,32 @@ public class NewPurchaseController implements Initializable {
         setProuctsList();
     }
 
-    public Purchase getPurchase(int purchase_ID) {
+    public Purchase getPurchase(int purchaseId) {
         Purchase purchase = new Purchase();
-        String query = "SELECT * FROM `purchases`   where id='" + purchase_ID + "' LIMIT 1";
-        Connection con = getConnection();
-        try {
-            Statement st = con.createStatement();
-            ResultSet rs = st.executeQuery(query);
-            while (rs.next()) {
-                purchase.setId(rs.getInt("id"));
-                purchase.setQuantity(rs.getFloat("quantity"));
-                purchase.setStock_id(rs.getInt("stock_id"));
-                purchase.setSupplier_id(rs.getInt("supplier_id"));
-                purchase.setPrice(rs.getInt("price"));
-                purchase.setPurchase_date(rs.getDate("purchase_date"));
 
+        String sql = "SELECT id, quantity, stock_id, supplier_id, price, purchase_date " +
+                "FROM purchases WHERE id = ? LIMIT 1";
 
+        try (Connection con = getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setInt(1, purchaseId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    purchase.setId(rs.getInt("id"));
+                    purchase.setQuantity(rs.getFloat("quantity"));
+                    purchase.setStock_id(rs.getInt("stock_id"));
+                    purchase.setSupplier_id(rs.getInt("supplier_id"));
+                    purchase.setPrice(rs.getInt("price"));
+                    purchase.setPurchase_date(rs.getDate("purchase_date"));
+                }
             }
-        } catch (Exception e) {
-            displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-            e.printStackTrace();
-        } finally {
-            disconnect();
+
+        } catch (SQLException e) {
+            displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
         }
+
         return purchase;
     }
 }
