@@ -167,22 +167,29 @@ public class NewMilkCollectionController implements Initializable {
 
     public MilkCollection getCollection(int milkCollection_ID) {
         MilkCollection milkCollection = new MilkCollection();
-        String query = "SELECT * FROM `milk_collections`   where id='" + milkCollection_ID + "' LIMIT 1";
+
+        String query = "SELECT * FROM `milk_collections` WHERE id = ? LIMIT 1";
+
         try (
                 Connection con = getConnection();
-                Statement stLocal = con.createStatement();
-                ResultSet rsLocal = stLocal.executeQuery(query)
+                PreparedStatement ps = con.prepareStatement(query)
         ) {
-            while (rsLocal.next()) {
-                milkCollection.setId(rsLocal.getInt("id"));
-                milkCollection.setQuantity(rsLocal.getFloat("quantity"));
-                milkCollection.setPeriod(rsLocal.getString("period"));
-                milkCollection.setCow_id(rsLocal.getString("cow_id"));
+            ps.setInt(1, milkCollection_ID);
+
+            try (ResultSet rsLocal = ps.executeQuery()) {
+                if (rsLocal.next()) {
+                    milkCollection.setId(rsLocal.getInt("id"));
+                    milkCollection.setQuantity(rsLocal.getFloat("quantity"));
+                    milkCollection.setPeriod(rsLocal.getString("period"));
+                    milkCollection.setCow_id(rsLocal.getString("cow_id"));
+                }
             }
+
         } catch (SQLException e) {
             displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
             e.printStackTrace();
         }
+
         return milkCollection;
     }
 }
