@@ -51,14 +51,6 @@ public class MilkCollectionController implements Initializable {
     private static final String COL_PERIOD = "period";
     private static final String COL_CREATED_AT = "created_at";
 
-    private static final String EXPORT_QUERY = "SELECT id, cow_id, quantity, period, created_at FROM milk_collections";
-    private static final String[] EXPORT_HEADERS = {
-            "Milk Collection ID",
-            "Cow ID",
-            "Milk Quantity",
-            "Collection Period",
-            "Collection Date"
-    };
 
     MilkCollection mc;
     @FXML
@@ -121,21 +113,19 @@ public class MilkCollectionController implements Initializable {
 
         String select_query = "SELECT  mc.id, mc.cow_id, quantity ,period,mc.created_at from  milk_collections mc ,animals a where mc.cow_id= a.id and a.type='cow' ";
 
-        try (Connection conn = DBConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(select_query);
-             ResultSet rs = ps.executeQuery()) {
+        statement = DBConfig.getConnection().prepareStatement(select_query);
+        resultSet = statement.executeQuery();
+        while (resultSet.next()) {
+            MilkCollection milkCollection = new MilkCollection();
+            milkCollection.setId(resultSet.getInt("id"));
+            milkCollection.setCow_id(resultSet.getString(COL_COW_ID));
+            milkCollection.setQuantity(resultSet.getFloat(COL_QUANTITY));
+            milkCollection.setPeriod(resultSet.getString(COL_PERIOD));
+            milkCollection.setCreated_at(resultSet.getTimestamp(COL_CREATED_AT));
 
-            while (rs.next()) {
-                MilkCollection milkCollection = new MilkCollection();
-                milkCollection.setId(rs.getInt("id"));
-                milkCollection.setCow_id(rs.getString(COL_COW_ID));
-                milkCollection.setQuantity(rs.getFloat(COL_QUANTITY));
-                milkCollection.setPeriod(rs.getString(COL_PERIOD));
-                milkCollection.setCreated_at(rs.getTimestamp(COL_CREATED_AT));
-                list.add(milkCollection);
-            }
+
+            list.add(milkCollection);
         }
-
         return list;
     }
 
@@ -287,27 +277,9 @@ public class MilkCollectionController implements Initializable {
         }
     }
 
+
     private Statement statemeent;
     private Connection connection = getConnection();
-
-    private void writeExportHeader(Row header) {
-        for (int i = 0; i < EXPORT_HEADERS.length; i++) {
-            header.createCell(i).setCellValue(EXPORT_HEADERS[i]);
-        }
-    }
-
-    private PdfPCell pdfHeaderCell(String text) {
-        PdfPCell cell = new PdfPCell(new Paragraph(text,
-                FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)));
-        cell.setPadding(5);
-        return cell;
-    }
-
-    private PdfPCell pdfValueCell(String text) {
-        PdfPCell cell = new PdfPCell(new Paragraph(text == null ? "" : text));
-        cell.setPadding(5);
-        return cell;
-    }
 
     void exportToExcel() {
         FileChooser fileChooser = new FileChooser();
@@ -322,16 +294,21 @@ public class MilkCollectionController implements Initializable {
             return;
         }
 
+        String query = "SELECT id, cow_id, quantity, period, created_at FROM milk_collections";
+
         try (Workbook workbook = new XSSFWorkbook();
              FileOutputStream fileOutputStream = new FileOutputStream(file);
-             Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(EXPORT_QUERY);
-             ResultSet rs = ps.executeQuery()) {
+             Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(query)) {
 
             Sheet sheet = workbook.createSheet("Milk Collection");
 
             Row header = sheet.createRow(0);
-            writeExportHeader(header);
+            header.createCell(0).setCellValue("Milk Collection ID");
+            header.createCell(1).setCellValue("Cow ID");
+            header.createCell(2).setCellValue("Milk Quantity");
+            header.createCell(3).setCellValue("Collection Period");
+            header.createCell(4).setCellValue("Collection Date");
 
             int rowNum = 1; // start after header
             while (rs.next()) {
@@ -360,10 +337,7 @@ public class MilkCollectionController implements Initializable {
         fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
         File file = fileChooser.showSaveDialog(null);
         if (file != null) {
-            try (Connection conn = getConnection();
-                 PreparedStatement ps = conn.prepareStatement(EXPORT_QUERY);
-                 ResultSet rs = ps.executeQuery()) {
-
+            try {
                 Document document = new Document();
                 // change document orientation to landscape
                 document.setPageSize(PageSize.A4.rotate());
@@ -403,21 +377,33 @@ public class MilkCollectionController implements Initializable {
                 table.setWidths(colWidth);
 
                 // add table header
-                table.addCell(pdfHeaderCell("Cow ID"));
-                table.addCell(pdfHeaderCell("Quantity"));
-                table.addCell(pdfHeaderCell("Period"));
-                table.addCell(pdfHeaderCell("Collection date"));
+                table.addCell(new PdfPCell(new Paragraph("Cow ID",
+                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph("Quantity",
+                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph("Period",
+                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph("Collection date",
+                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
 
                 // add padding to cells
                 table.getDefaultCell().setPadding(3);
                 table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
                 table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
 
-                while (rs.next()) {
-                    table.addCell(pdfValueCell(rs.getString(COL_COW_ID)));
-                    table.addCell(pdfValueCell(rs.getString(COL_QUANTITY)));
-                    table.addCell(pdfValueCell(rs.getString(COL_PERIOD)));
-                    table.addCell(pdfValueCell(rs.getString(COL_CREATED_AT)));
+                // get collections displayed in table
+                ObservableList<MilkCollection> milkCollections = MilkCollectionTable.getItems();
+
+                // get collection of each row
+                NewMilkCollectionController controller = new NewMilkCollectionController();
+
+                for (MilkCollection milkCollection : milkCollections) {
+                    MilkCollection milkCol = controller.getCollection(milkCollection.getId());
+
+                    table.addCell(new PdfPCell(new Paragraph(milkCol.getCow_id()))).setPadding(5);
+                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkCol.getQuantity())))).setPadding(5);
+                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkCol.getPeriod())))).setPadding(5);
+                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkCol.getCreated_at())))).setPadding(5);
                 }
 
                 document.add(table);
@@ -431,6 +417,7 @@ public class MilkCollectionController implements Initializable {
         }
     }
 
+
     public void liveSearch(TextField search_input, TableView table) {
         search_input.textProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue == null || newValue.isEmpty()) {
@@ -441,7 +428,7 @@ public class MilkCollectionController implements Initializable {
                 }
             } else {
                 ObservableList<MilkCollection> filteredList = FXCollections.observableArrayList();
-                ObservableList<MilkCollection> milkCollections;
+                ObservableList<MilkCollection> milkCollections = null;
                 try {
                     milkCollections = getMilkCollection();
                 } catch (SQLException e) {
