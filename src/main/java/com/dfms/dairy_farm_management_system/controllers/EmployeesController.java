@@ -47,6 +47,14 @@ import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConne
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
 public class EmployeesController implements Initializable {
+
+    private static final String TITLE_SUCCESS = "Success";
+    private static final String TITLE_ERROR = "Error";
+    private static final String ICON_STYLE = "-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;";
+    private static final String COL_SALARY = "salary";
+    private static final String COL_EMAIL = "email";
+
+
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
         //this line of code is so important for the export !!!!
@@ -122,9 +130,9 @@ public class EmployeesController implements Initializable {
                 employee.setAdress(employees.getString("address"));
                 employee.setHireDate(employees.getDate("hire_date"));
                 employee.setContractType(employees.getString("contract_type"));
-                employee.setEmail(employees.getString("email"));
+                employee.setEmail(employees.getString(COL_EMAIL));
                 employee.setGender(employees.getString("gender"));
-                employee.setSalary(employees.getInt("salary"));
+                employee.setSalary(employees.getInt(COL_SALARY));
                 list.add(employee);
             }
             ResultSet users = statement.executeQuery(usersQuery);
@@ -137,13 +145,13 @@ public class EmployeesController implements Initializable {
                 user.setAdress(users.getString("address"));
                 user.setHireDate(users.getDate("hire_date"));
                 user.setContractType(users.getString("contract_type"));
-                user.setEmail(users.getString("email"));
+                user.setEmail(users.getString(COL_EMAIL));
                 user.setGender(users.getString("gender"));
-                user.setSalary(users.getInt("salary"));
+                user.setSalary(users.getInt(COL_SALARY));
                 list.add(user);
             }
         } catch (Exception e) {
-            displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+            displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
         }
         return list;
     }
@@ -154,8 +162,8 @@ public class EmployeesController implements Initializable {
         col_cin.setCellValueFactory(new PropertyValueFactory<>("cin"));
         first_name_col.setCellValueFactory(new PropertyValueFactory<>("firstName"));
         last_name_col.setCellValueFactory(new PropertyValueFactory<>("lastName"));
-        email_col.setCellValueFactory(new PropertyValueFactory<>("email"));
-        salary_col.setCellValueFactory(new PropertyValueFactory<>("salary"));
+        email_col.setCellValueFactory(new PropertyValueFactory<>(COL_EMAIL));
+        salary_col.setCellValueFactory(new PropertyValueFactory<>(COL_SALARY));
 
         Callback<TableColumn<Employee, String>, TableCell<Employee, String>> cellFoctory = (TableColumn<Employee, String> param) -> {
             final TableCell<Employee, String> cell = new TableCell<Employee, String>() {
@@ -172,7 +180,7 @@ public class EmployeesController implements Initializable {
                         setText(null);
                     } else {
                         ImageView iv_view_details = new ImageView();
-                        iv_view_details.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+                        iv_view_details.setStyle(ICON_STYLE);
                         iv_view_details.setImage(view_details_img);
                         iv_view_details.setPreserveRatio(true);
                         iv_view_details.setSmooth(true);
@@ -180,14 +188,14 @@ public class EmployeesController implements Initializable {
 
 
                         ImageView iv_edit = new ImageView();
-                        iv_edit.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+                        iv_edit.setStyle(ICON_STYLE);
                         iv_edit.setImage(edit_img);
                         iv_edit.setPreserveRatio(true);
                         iv_edit.setSmooth(true);
                         iv_edit.setCache(true);
 
                         ImageView iv_delete = new ImageView();
-                        iv_delete.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+                        iv_delete.setStyle(ICON_STYLE);
 
                         iv_delete.setImage(delete_img);
                         iv_delete.setPreserveRatio(true);
@@ -212,11 +220,11 @@ public class EmployeesController implements Initializable {
                             if (result.get() == ButtonType.OK) {
                                 try {
                                     if (employee.delete()) {
-                                        displayAlert("Success", "Employee deleted successfully", Alert.AlertType.INFORMATION);
+                                        displayAlert(TITLE_SUCCESS, "Employee deleted successfully", Alert.AlertType.INFORMATION);
                                         displayEmployees();
                                     }
                                 } catch (Exception e) {
-                                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                    displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
                                 }
                             }
                         });
@@ -231,7 +239,7 @@ public class EmployeesController implements Initializable {
                                 UpdateEmployeeController controller = fxmlLoader.getController();
                                 controller.fetchEmployee(employee);
                             } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
                                 e.printStackTrace();
                             }
                             Stage stage = new Stage();
@@ -253,7 +261,7 @@ public class EmployeesController implements Initializable {
                                 EmployeeDetailsController controller = fxmlLoader.getController();
                                 controller.fetchEmployee(employee);
                             } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
                                 e.printStackTrace();
                             }
                             Stage stage = new Stage();
@@ -308,69 +316,98 @@ public class EmployeesController implements Initializable {
     }
 
     void exportToExcel() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Save As");
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"), new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
-        File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try {
-                Workbook workbook = new XSSFWorkbook();
-                Sheet sheet = workbook.createSheet("Employees");
-                Row header = sheet.createRow(0);
-                header.createCell(0).setCellValue("First Name");
-                header.createCell(1).setCellValue("Last Name");
-                header.createCell(2).setCellValue("Email");
-                header.createCell(3).setCellValue("Phone");
-                header.createCell(4).setCellValue("Address");
-                header.createCell(5).setCellValue("CIN");
-                header.createCell(6).setCellValue("Gender");
-                header.createCell(7).setCellValue("Hire Date");
-                header.createCell(8).setCellValue("Salary");
+        File file = chooseExcelFile();
+        if (file == null) {
+            return;
+        }
 
-                //get employees displayed in table
-                ObservableList<Employee> employees = employees_table.getItems();
+        ObservableList<Employee> employees = employees_table.getItems();
+        UpdateEmployeeController controller = new UpdateEmployeeController();
 
-                //get employee of each row
-                //used a method in my updateEmplyeeController to get the employee of each row based on the cin
-                UpdateEmployeeController controller = new UpdateEmployeeController();
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Employees");
+            createEmployeesHeader(sheet.createRow(0));
 
-                for (Employee employee : employees) {
-                    Employee emp = controller.getEmployee(employee.getCin());
-
-                    String firstName = emp.getFirstName() != null ? emp.getFirstName() : "-";
-                    String lastName = emp.getLastName() != null ? emp.getLastName() : "-";
-                    String email = emp.getEmail() != null ? emp.getEmail() : "-";
-                    String phone = emp.getPhone() != null ? emp.getPhone() : "-";
-                    String address = emp.getAddress() != null ? emp.getAddress() : "-";
-                    String cin = emp.getCin() != null ? emp.getCin() : "-";
-                    String gender = emp.getGender() != null
-                            ? emp.getGender().equals("M") ? "Male" : "Female"
-                            : "-";
-                    String hireDate = emp.getHireDate() != null ? emp.getHireDate().toString() : "-";
-                    String salary = emp.getSalary() != 0 ? NumberFormat.getNumberInstance().format(emp.getSalary()) : "-";
-
-                    Row row = sheet.createRow(sheet.getLastRowNum() + 1);
-                    row.createCell(0).setCellValue(firstName);
-                    row.createCell(1).setCellValue(lastName);
-                    row.createCell(2).setCellValue(email);
-                    row.createCell(3).setCellValue(phone);
-                    row.createCell(4).setCellValue(address);
-                    row.createCell(5).setCellValue(cin);
-                    row.createCell(6).setCellValue(gender);
-                    row.createCell(7).setCellValue(hireDate);
-                    row.createCell(8).setCellValue(salary);
-                }
-
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                workbook.write(fileOutputStream);
-                workbook.close();
-
-                displayAlert("Success", "Employees exported successfully", Alert.AlertType.INFORMATION);
-            } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+            for (Employee employee : employees) {
+                Employee emp = controller.getEmployee(employee.getCin());
+                writeEmployeeRow(sheet, emp);
             }
+
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                workbook.write(out);
+            }
+
+            displayAlert(TITLE_SUCCESS, "Employees exported successfully", Alert.AlertType.INFORMATION);
+
+        } catch (IOException e) {
+            displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
         }
     }
+
+    private File chooseExcelFile() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Save As");
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx")
+        );
+
+        File file = fileChooser.showSaveDialog(null);
+        if (file == null) {
+            return null;
+        }
+
+        if (!file.getName().toLowerCase().endsWith(".xlsx")) {
+            file = new File(file.getParent(), file.getName() + ".xlsx");
+        }
+        return file;
+    }
+
+    private void createEmployeesHeader(Row header) {
+        header.createCell(0).setCellValue("First Name");
+        header.createCell(1).setCellValue("Last Name");
+        header.createCell(2).setCellValue("Email");
+        header.createCell(3).setCellValue("Phone");
+        header.createCell(4).setCellValue("Address");
+        header.createCell(5).setCellValue("CIN");
+        header.createCell(6).setCellValue("Gender");
+        header.createCell(7).setCellValue("Hire Date");
+        header.createCell(8).setCellValue("Salary");
+    }
+
+    private String safeString(String value) {
+        return value != null ? value : "-";
+    }
+
+    private String formatGender(String genderCode) {
+        if ("M".equals(genderCode)) return "Male";
+        if ("F".equals(genderCode)) return "Female";
+        return "-";
+    }
+
+    private String formatHireDate(Object hireDate) {
+        return hireDate != null ? hireDate.toString() : "-";
+    }
+
+    private String formatSalary(float salary) {
+        return salary != 0f ? NumberFormat.getNumberInstance().format(salary) : "-";
+    }
+
+
+    private void writeEmployeeRow(Sheet sheet, Employee emp) {
+        int rowIndex = sheet.getLastRowNum() + 1;
+        Row row = sheet.createRow(rowIndex);
+
+        row.createCell(0).setCellValue(safeString(emp.getFirstName()));
+        row.createCell(1).setCellValue(safeString(emp.getLastName()));
+        row.createCell(2).setCellValue(safeString(emp.getEmail()));
+        row.createCell(3).setCellValue(safeString(emp.getPhone()));
+        row.createCell(4).setCellValue(safeString(emp.getAddress()));
+        row.createCell(5).setCellValue(safeString(emp.getCin()));
+        row.createCell(6).setCellValue(formatGender(emp.getGender()));
+        row.createCell(7).setCellValue(formatHireDate(emp.getHireDate()));
+        row.createCell(8).setCellValue(formatSalary(emp.getSalary()));
+    }
+
 
     void exportToPDF() {
         FileChooser fileChooser = new FileChooser();
@@ -399,7 +436,7 @@ public class EmployeesController implements Initializable {
                     document.add(text);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                    displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
                 }
                 PdfPTable table = new PdfPTable(COLUMNS_COUNT);
 
@@ -445,9 +482,13 @@ public class EmployeesController implements Initializable {
                     String phone = emp.getPhone() != null ? emp.getPhone() : "-";
                     String address = emp.getAddress() != null ? emp.getAddress() : "-";
                     String cin = emp.getCin() != null ? emp.getCin() : "-";
-                    String gender = emp.getGender() != null
-                            ? emp.getGender().equals("M") ? "Male" : "Female"
-                            : "-";
+                    String gender = "-";
+                    if ("M".equals(emp.getGender())) {
+                        gender = "Male";
+                    } else if ("F".equals(emp.getGender())) {
+                        gender = "Female";
+                    }
+
                     String hireDate = emp.getHireDate() != null ? emp.getHireDate().toString() : "-";
                     String salary = emp.getSalary() != 0 ? NumberFormat.getNumberInstance().format(emp.getSalary()) : "-";
 
@@ -464,9 +505,9 @@ public class EmployeesController implements Initializable {
 
                 document.add(table);
                 document.close();
-                displayAlert("Success", "Employees exported successfully", Alert.AlertType.INFORMATION);
+                displayAlert(TITLE_SUCCESS, "Employees exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
     }

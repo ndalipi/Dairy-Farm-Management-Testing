@@ -26,10 +26,16 @@ import java.util.ResourceBundle;
 import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConnection;
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 public class EmployeeDetailsController implements Initializable {
+    private static final Logger LOGGER = LoggerFactory.getLogger(EmployeeDetailsController.class);
+
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
-
+        // No initialization required for this controller
     }
 
     @FXML
@@ -69,53 +75,63 @@ public class EmployeeDetailsController implements Initializable {
     @FXML
     private Label salary;
 
-    private static Employee current_employee = null;
+    private Employee current_employee = null;
 
     public void fetchEmployee(Employee employee) {
         UpdateEmployeeController controller = new UpdateEmployeeController();
-        this.current_employee = controller.getEmployee(employee.getCin());
+        current_employee = controller.getEmployee(employee.getCin());
 
-        //get the employee from the database
-        Connection connection = getConnection();
-        PreparedStatement preparedStatement = null;
-        ResultSet resultSet = null;
+        String sql = "SELECT * FROM employees WHERE cin = ? LIMIT 1";
 
-        try {
-            preparedStatement = connection.prepareStatement("SELECT * FROM `employees` WHERE cin = '" + employee.getCin() + "' LIMIT 1");
-            resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                header.setText(resultSet.getString("first_name") + " " + resultSet.getString("last_name"));
-                email.setText(resultSet.getString("email"));
-                first_name.setText(resultSet.getString("first_name"));
-                last_name.setText(resultSet.getString("last_name"));
-                salary.setText(String.valueOf(resultSet.getInt("salary")));
-                address.setText(resultSet.getString("address"));
-                cin.setText(resultSet.getString("cin"));
-                phone.setText(resultSet.getString("phone"));
-                contract_type.setText(resultSet.getString("contract_type"));
-                recruitment_date.setText(resultSet.getString("hire_date"));
+        try (Connection connection = getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
-                //TODO: get the role name from the database
+            preparedStatement.setString(1, employee.getCin());
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                if (resultSet.next()) {
+                    header.setText(resultSet.getString("first_name") + " " + resultSet.getString("last_name"));
+                    email.setText(resultSet.getString("email"));
+                    first_name.setText(resultSet.getString("first_name"));
+                    last_name.setText(resultSet.getString("last_name"));
+                    salary.setText(String.valueOf(resultSet.getInt("salary")));
+                    address.setText(resultSet.getString("address"));
+                    cin.setText(resultSet.getString("cin"));
+                    phone.setText(resultSet.getString("phone"));
+                    contract_type.setText(resultSet.getString("contract_type"));
+                    recruitment_date.setText(resultSet.getString("hire_date"));
+                }
             }
-        } catch (Exception e) {
+
+        } catch (java.sql.SQLException e) {
             e.printStackTrace();
         }
     }
+
 
     public String getRole(int id) {
-        String role = "";
-        try {
-            Connection con = getConnection();
-            Statement st = con.createStatement();
-            ResultSet rs = st.executeQuery("SELECT name FROM `roles` WHERE id = " + id);
-            while (rs.next()) {
-                role = rs.getString("name");
+        String roleName = "";
+
+        String sql = "SELECT name FROM roles WHERE id = ?";
+
+        try (Connection con = getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setInt(1, id);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    roleName = rs.getString("name");
+                }
             }
-        } catch (Exception e) {
+
+        } catch (java.sql.SQLException e) {
             e.printStackTrace();
         }
-        return role;
+
+        return roleName;
     }
+
 
     @FXML
     void printEmployeeDetails(MouseEvent event) {
@@ -147,7 +163,7 @@ public class EmployeeDetailsController implements Initializable {
     // iText allows to add metadata to the PDF which can be viewed in your Adobe
     // Reader
     // under File -> Properties
-    private static void addMetaData(Document document) {
+    private void addMetaData(Document document) {
         document.addTitle("Employee Details");
         document.addSubject("Print all employee details");
         document.addKeywords("employee, details, pdf");
@@ -155,7 +171,7 @@ public class EmployeeDetailsController implements Initializable {
         document.addCreator("GRASS LAND DAIRY");
     }
 
-    private static void addTitlePage(Document document) throws DocumentException {
+    private void addTitlePage(Document document) throws DocumentException {
         Paragraph preface = new Paragraph();
 
         // We add one empty line
@@ -187,7 +203,7 @@ public class EmployeeDetailsController implements Initializable {
         document.add(preface);
     }
 
-    private static void addContent(Document document) throws DocumentException {
+    private void addContent(Document document) throws DocumentException {
         int MAX_LENGTH = 22;
         Paragraph preface = new Paragraph();
         String full_name = formatString("Full Name:", MAX_LENGTH) + ": " + current_employee.getFirstName() + " " + current_employee.getLastName();
@@ -198,7 +214,6 @@ public class EmployeeDetailsController implements Initializable {
         String contract_type = formatString("Contract Type:", MAX_LENGTH) + ": " + current_employee.getContractType();
         String hire_date = formatString("Hire Date:", MAX_LENGTH) + ": " + current_employee.getHireDate();
         String salary = formatString("Salary:", MAX_LENGTH) + ": " + current_employee.getSalary();
-        //String role = formatString("Role:", MAX_LENGTH) + ": " + getRole(current_employee.getRole());
 
         preface.add(new Paragraph(full_name, new Font(Font.FontFamily.HELVETICA, 12, Font.NORMAL, BaseColor.BLACK)));
         preface.add(new Paragraph(email, new Font(Font.FontFamily.HELVETICA, 12, Font.NORMAL, BaseColor.BLACK)));
@@ -208,11 +223,10 @@ public class EmployeeDetailsController implements Initializable {
         preface.add(new Paragraph(salary, new Font(Font.FontFamily.HELVETICA, 12, Font.NORMAL, BaseColor.BLACK)));
         preface.add(new Paragraph(contract_type, new Font(Font.FontFamily.HELVETICA, 12, Font.NORMAL, BaseColor.BLACK)));
         preface.add(new Paragraph(hire_date, new Font(Font.FontFamily.HELVETICA, 12, Font.NORMAL, BaseColor.BLACK)));
-        //preface.add(new Paragraph(role, new Font(Font.FontFamily.HELVETICA, 12, Font.NORMAL, BaseColor.BLACK)));
         document.add(preface);
     }
 
-    private static void addImage(Document document) {
+    private void addImage(Document document) {
         Image image = null;
         try {
             image = Image.getInstance(Main.class.getResource("/images/logo.png"));
@@ -226,7 +240,7 @@ public class EmployeeDetailsController implements Initializable {
         }
     }
 
-    private static void addOutro(Document document) throws DocumentException {
+    private void addOutro(Document document) throws DocumentException {
         Paragraph preface = new Paragraph();
         addEmptyLine(preface, 1);
         String outro = "Thank you for using our application\n" +
@@ -236,7 +250,7 @@ public class EmployeeDetailsController implements Initializable {
         document.add(preface);
     }
 
-    private static void addEmptyLine(Paragraph paragraph, int number) {
+    private void addEmptyLine(Paragraph paragraph, int number) {
         for (int i = 0; i < number; i++) {
             paragraph.add(new Paragraph(" "));
         }
@@ -244,15 +258,21 @@ public class EmployeeDetailsController implements Initializable {
 
     //print the employee details
     public void printEmployeeToConsole(Employee employee) {
-        System.out.println("Employee Details");
-        System.out.println("First Name: " + employee.getFirstName());
-        System.out.println("Last Name: " + employee.getLastName());
-        System.out.println("Email: " + employee.getEmail());
-        System.out.println("Phone: " + employee.getPhone());
-        System.out.println("Address: " + employee.getAddress());
-        System.out.println("CIN: " + employee.getCin());
-        System.out.println("Salary: " + employee.getSalary());
-        System.out.println("Recruitment Date: " + employee.getHireDate());
-        System.out.println("Contract Type: " + employee.getContractType());
+        if (employee == null) {
+            LOGGER.warn("printEmployeeToConsole called with null employee");
+            return;
+        }
+
+        LOGGER.info("Employee Details");
+        LOGGER.info("First Name: {}", employee.getFirstName());
+        LOGGER.info("Last Name: {}", employee.getLastName());
+        LOGGER.info("Email: {}", employee.getEmail());
+        LOGGER.info("Phone: {}", employee.getPhone());
+        LOGGER.info("Address: {}", employee.getAddress());
+        LOGGER.info("CIN: {}", employee.getCin());
+        LOGGER.info("Salary: {}", employee.getSalary());
+        LOGGER.info("Recruitment Date: {}", employee.getHireDate());
+        LOGGER.info("Contract Type: {}", employee.getContractType());
     }
+
 }
