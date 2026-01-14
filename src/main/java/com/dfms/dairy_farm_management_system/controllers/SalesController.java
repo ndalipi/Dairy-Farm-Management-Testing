@@ -39,6 +39,8 @@ import java.sql.*;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import static com.dfms.dairy_farm_management_system.connection.DBConfig.disconnect;
 import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConnection;
@@ -55,48 +57,13 @@ public class SalesController implements Initializable {
     private static final String COLUMN_SALE_DATE = "sale_date";
     private static final String COLUMN_QUANTITY = "quantity";
 
-
-
     private static final String APP_LOGO_PATH = "file:src/main/resources/images/logo.png";
     private static final String ICON_STYLE =
             "-fx-background-color: transparent;" +
                     "-fx-cursor: hand;" +
                     "-fx-size:15px;";
 
-
-    @Override
-    public void initialize(URL url, ResourceBundle resourceBundle) {
-        BasicConfigurator.configure();
-        combo.setItems(list);
-        combo1.setItems(list);
-
-        combo.getSelectionModel().selectedItemProperty().addListener((observableValue, s, t1) -> {
-            if (t1.equals("PDF")) {
-                exportToPDF();
-            } else {
-                exportToExcel();
-            }
-        });
-        combo1.getSelectionModel().selectedItemProperty().addListener((observableValue, s, t1) -> {
-            if (t1.equals("PDF")) {
-                exportToPDF2();
-            } else {
-                exportToExcel2();
-            }
-        });
-        liveSearch(search_input, AnimalSalesTable);
-        try {
-            afficher();
-        } catch (SQLException | ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-        try {
-            afficheer();
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-        liveSearch2(search_inpu, MilkSaleTable);
-    }
+    private static final int COLUMNS_COUNT = 4;
 
     @FXML
     private TableView<MilkSale> MilkSaleTable;
@@ -121,14 +88,15 @@ public class SalesController implements Initializable {
 
     @FXML
     private Button search_btn;
+
     @FXML
     private Button refresh_table_btn;
 
     @FXML
     private Button refresh_table_btn1;
+
     @FXML
     private TextField search_inpu;
-
 
     @FXML
     private ComboBox<String> combo;
@@ -157,8 +125,48 @@ public class SalesController implements Initializable {
     private TextField search_input;
 
     PreparedStatement statement = null;
-
     ResultSet resultSet = null;
+
+    private Statement statemeent;
+    private Connection connection = getConnection();
+
+    private final Image editImg = new Image(getClass().getResourceAsStream("/images/edit.png"));
+    private final Image deleteImg = new Image(getClass().getResourceAsStream("/images/delete.png"));
+    private final Image viewImg = new Image(getClass().getResourceAsStream("/images/eye.png"));
+
+    @Override
+    public void initialize(URL url, ResourceBundle resourceBundle) {
+        BasicConfigurator.configure();
+        combo.setItems(list);
+        combo1.setItems(list);
+
+        setupExportCombo(combo, this::exportToPDF, this::exportToExcel);
+        setupExportCombo(combo1, this::exportToPDF2, this::exportToExcel2);
+
+        liveSearch(search_input, AnimalSalesTable);
+        try {
+            afficher();
+        } catch (SQLException | ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+        try {
+            afficheer();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        liveSearch2(search_inpu, MilkSaleTable);
+    }
+
+    private void setupExportCombo(ComboBox<String> target, Runnable pdfAction, Runnable excelAction) {
+        target.getSelectionModel().selectedItemProperty().addListener((observableValue, s, t1) -> {
+            if (t1 == null) return;
+            if ("PDF".equals(t1)) {
+                pdfAction.run();
+            } else {
+                excelAction.run();
+            }
+        });
+    }
 
     @FXML
     public void openAddNewAnimalSale(MouseEvent mouseEvent) throws IOException {
@@ -213,11 +221,6 @@ public class SalesController implements Initializable {
 
         action_col.setCellFactory(col -> new TableCell<AnimalSale, String>() {
 
-            // keep these inside the method (not constants), but still avoid reloading per row repaint
-            final Image editImg = new Image(getClass().getResourceAsStream("/images/edit.png"));
-            final Image deleteImg = new Image(getClass().getResourceAsStream("/images/delete.png"));
-            final Image viewImg = new Image(getClass().getResourceAsStream("/images/eye.png"));
-
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
@@ -228,30 +231,11 @@ public class SalesController implements Initializable {
                     return;
                 }
 
-                ImageView ivView = new ImageView(viewImg);
-                ivView.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
-                ivView.setPreserveRatio(true);
-                ivView.setSmooth(true);
-                ivView.setCache(true);
+                ImageView ivView = createIcon(viewImg);
+                ImageView ivEdit = createIcon(editImg);
+                ImageView ivDelete = createIcon(deleteImg);
 
-                ImageView ivEdit = new ImageView(editImg);
-                ivEdit.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
-                ivEdit.setPreserveRatio(true);
-                ivEdit.setSmooth(true);
-                ivEdit.setCache(true);
-
-                ImageView ivDelete = new ImageView(deleteImg);
-                ivDelete.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
-                ivDelete.setPreserveRatio(true);
-                ivDelete.setSmooth(true);
-                ivDelete.setCache(true);
-
-                HBox managebtn = new HBox(ivView, ivEdit, ivDelete);
-                managebtn.setStyle("-fx-alignment:center");
-                HBox.setMargin(ivView, new Insets(1, 1, 0, 3));
-                HBox.setMargin(ivEdit, new Insets(1, 1, 0, 3));
-                HBox.setMargin(ivDelete, new Insets(1, 1, 0, 3));
-
+                HBox managebtn = createManageButtons(ivView, ivEdit, ivDelete);
                 setGraphic(managebtn);
                 setText(null);
 
@@ -282,55 +266,35 @@ public class SalesController implements Initializable {
                     AnimalSale selected = AnimalSalesTable.getSelectionModel().getSelectedItem();
                     if (selected == null) return;
 
-                    FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/add_new_cow_sale.fxml"));
-                    try {
-                        Scene scene = new Scene(fxmlLoader.load());
-
-                        CowSalesController cowSalesController = fxmlLoader.getController();
-                        cowSalesController.setUpdate(true);
-                        cowSalesController.fetchAnimalSale(selected);
-
-                        Stage stage = new Stage();
-                        stage.getIcons().add(new Image(APP_LOGO_PATH));
-                        stage.setTitle("Update Animal Sale");
-                        stage.setResizable(false);
-                        stage.setScene(scene);
-                        centerScreen(stage);
-                        stage.show();
-                    } catch (IOException e) {
-                        displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-                        e.printStackTrace();
-                    }
+                    openPopup(
+                            "/com/dfms/dairy_farm_management_system/popups/add_new_cow_sale.fxml",
+                            "Update Animal Sale",
+                            controller -> {
+                                CowSalesController cowSalesController = (CowSalesController) controller;
+                                cowSalesController.setUpdate(true);
+                                cowSalesController.fetchAnimalSale(selected);
+                            }
+                    );
                 });
 
                 ivView.setOnMouseClicked(event -> {
                     AnimalSale selected = AnimalSalesTable.getSelectionModel().getSelectedItem();
                     if (selected == null) return;
 
-                    FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/animal_sale_details.fxml"));
-                    try {
-                        Scene scene = new Scene(fxmlLoader.load());
-
-                        AnimalSaleDetailsController controller = fxmlLoader.getController();
-                        controller.fetchAnimalSale(
-                                selected.getId(),
-                                selected.getAnimalId(),
-                                selected.getPrice(),
-                                selected.getClientName(),
-                                selected.getSale_date()
-                        );
-
-                        Stage stage = new Stage();
-                        stage.getIcons().add(new Image(APP_LOGO_PATH));
-                        stage.setTitle("Animal Sale Details");
-                        stage.setResizable(false);
-                        stage.setScene(scene);
-                        centerScreen(stage);
-                        stage.show();
-                    } catch (IOException e) {
-                        displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-                        e.printStackTrace();
-                    }
+                    openPopup(
+                            "/com/dfms/dairy_farm_management_system/popups/animal_sale_details.fxml",
+                            "Animal Sale Details",
+                            controller -> {
+                                AnimalSaleDetailsController c = (AnimalSaleDetailsController) controller;
+                                c.fetchAnimalSale(
+                                        selected.getId(),
+                                        selected.getAnimalId(),
+                                        selected.getPrice(),
+                                        selected.getClientName(),
+                                        selected.getSale_date()
+                                );
+                            }
+                    );
                 });
             }
         });
@@ -338,6 +302,46 @@ public class SalesController implements Initializable {
         AnimalSalesTable.setItems(list);
     }
 
+    private ImageView createIcon(Image image) {
+        ImageView iv = new ImageView(image);
+        iv.setStyle(ICON_STYLE);
+        iv.setPreserveRatio(true);
+        iv.setSmooth(true);
+        iv.setCache(true);
+        return iv;
+    }
+
+    private HBox createManageButtons(ImageView... icons) {
+        HBox managebtn = new HBox(icons);
+        managebtn.setStyle("-fx-alignment:center");
+        for (ImageView icon : icons) {
+            HBox.setMargin(icon, new Insets(1, 1, 0, 3));
+        }
+        return managebtn;
+    }
+
+    private void openPopup(String fxmlPath, String title, Consumer<Object> initController) {
+        FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource(fxmlPath));
+        try {
+            Scene scene = new Scene(fxmlLoader.load());
+
+            Object controller = fxmlLoader.getController();
+            if (initController != null) {
+                initController.accept(controller);
+            }
+
+            Stage stage = new Stage();
+            stage.getIcons().add(new Image(APP_LOGO_PATH));
+            stage.setTitle(title);
+            stage.setResizable(false);
+            stage.setScene(scene);
+            centerScreen(stage);
+            stage.show();
+        } catch (IOException e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            e.printStackTrace();
+        }
+    }
 
     public void liveSearch(TextField search_input, TableView table) {
         search_input.textProperty().addListener((observable, oldValue, newValue) -> {
@@ -396,56 +400,24 @@ public class SalesController implements Initializable {
         client_c.setCellValueFactory(new PropertyValueFactory<MilkSale, String>("clientName"));
         date_c.setCellValueFactory(new PropertyValueFactory<MilkSale, LocalDate>(COLUMN_SALE_DATE));
 
-
         Callback<TableColumn<MilkSale, String>, TableCell<MilkSale, String>> cellFoctory = (TableColumn<MilkSale, String> param) -> {
-            // make cell containing buttons
             final TableCell<MilkSale, String> cell = new TableCell<MilkSale, String>() {
-
-                Image edit_img = new Image(getClass().getResourceAsStream("/images/edit.png"));
-                Image delete_img = new Image(getClass().getResourceAsStream("/images/delete.png"));
-                Image view_details_img = new Image(getClass().getResourceAsStream("/images/eye.png"));
 
                 @Override
                 public void updateItem(String item, boolean empty) {
                     super.updateItem(item, empty);
-                    //that cell created only on non-empty rows
                     if (empty) {
                         setGraphic(null);
                         setText(null);
-
                     } else {
-                        ImageView iv_view_details = new ImageView();
-                        iv_view_details.setStyle(ICON_STYLE);
-                        iv_view_details.setImage(view_details_img);
-                        iv_view_details.setPreserveRatio(true);
-                        iv_view_details.setSmooth(true);
-                        iv_view_details.setCache(true);
+                        ImageView ivView = createIcon(viewImg);
+                        ImageView ivEdit = createIcon(editImg);
+                        ImageView ivDelete = createIcon(deleteImg);
 
-
-                        ImageView iv_edit = new ImageView();
-                        iv_edit.setStyle(ICON_STYLE);
-                        iv_edit.setImage(edit_img);
-                        iv_edit.setPreserveRatio(true);
-                        iv_edit.setSmooth(true);
-                        iv_edit.setCache(true);
-
-                        ImageView iv_delete = new ImageView();
-                        iv_delete.setStyle(ICON_STYLE);
-
-                        iv_delete.setImage(delete_img);
-                        iv_delete.setPreserveRatio(true);
-                        iv_delete.setSmooth(true);
-                        iv_delete.setCache(true);
-
-                        HBox managebtn = new HBox(iv_view_details, iv_edit, iv_delete);
-                        managebtn.setStyle("-fx-alignment:center");
-                        HBox.setMargin(iv_view_details, new Insets(1, 1, 0, 3));
-                        HBox.setMargin(iv_delete, new Insets(1, 1, 0, 3));
-                        HBox.setMargin(iv_edit, new Insets(1, 1, 0, 3));
-
+                        HBox managebtn = createManageButtons(ivView, ivEdit, ivDelete);
                         setGraphic(managebtn);
 
-                        iv_delete.setOnMouseClicked((MouseEvent event) -> {
+                        ivDelete.setOnMouseClicked((MouseEvent event) -> {
                             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
                             alert.setTitle("Delete Confirmation");
                             alert.setHeaderText("Are you sure you want to delete this cow sale?");
@@ -455,73 +427,49 @@ public class SalesController implements Initializable {
                             if (result.get() == ButtonType.OK) {
                                 try {
                                     if (mc.delete()) {
-
                                         displayAlert(SUCCESS_TITLE, "Milk Sale deleted successfully", Alert.AlertType.INFORMATION);
                                         refreshTableMilkSales();
                                     } else {
                                         displayAlert(ERROR_TITLE, "Error while deleting!!!", Alert.AlertType.ERROR);
-
                                     }
                                 } catch (Exception e) {
                                     displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
                                 }
-
                             }
-
                         });
 
-                        iv_edit.setOnMouseClicked((MouseEvent event) -> {
+                        ivEdit.setOnMouseClicked((MouseEvent event) -> {
                             MilkSale milkSale = MilkSaleTable.getSelectionModel().getSelectedItem();
-                            FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/add_new_milk_sale.fxml"));
-                            Scene scene = null;
-                            try {
-                                scene = new Scene(fxmlLoader.load());
-                            } catch (IOException e) {
-                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-                                e.printStackTrace();
-                            }
-                            MilkSalesController milkSalesController = fxmlLoader.getController();
-                            milkSalesController.setUpdate(true);
-                            milkSalesController.fetchMilkSale(milkSale);
-                            Stage stage = new Stage();
-                            stage.getIcons().add(new Image(APP_LOGO_PATH));
-                            stage.setTitle("Update Milk Sale");
-                            stage.setResizable(false);
-                            stage.setScene(scene);
-                            centerScreen(stage);
-                            stage.show();
+                            openPopup(
+                                    "/com/dfms/dairy_farm_management_system/popups/add_new_milk_sale.fxml",
+                                    "Update Milk Sale",
+                                    controller -> {
+                                        MilkSalesController milkSalesController = (MilkSalesController) controller;
+                                        milkSalesController.setUpdate(true);
+                                        milkSalesController.fetchMilkSale(milkSale);
+                                    }
+                            );
                         });
-                        iv_view_details.setOnMouseClicked((MouseEvent event) -> {
+
+                        ivView.setOnMouseClicked((MouseEvent event) -> {
                             MilkSale milkSale = MilkSaleTable.getSelectionModel().getSelectedItem();
-                            FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/milk_sale_details.fxml"));
-                            Scene scene = null;
-                            try {
-                                scene = new Scene(fxmlLoader.load());
-                                MilkSaleDetailsController controller = fxmlLoader.getController();
-                                controller.fetchMilkSale(milkSale.getId(), milkSale.getQuantity(), milkSale.getPrice(), milkSale.getClientName(), milkSale.getSale_date());
-                            } catch (IOException e) {
-                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-                                e.printStackTrace();
-                            }
-                            Stage stage = new Stage();
-                            stage.getIcons().add(new Image(APP_LOGO_PATH));
-                            stage.setTitle("Animal Sale Details");
-                            stage.setResizable(false);
-                            stage.setScene(scene);
-                            centerScreen(stage);
-                            stage.show();
+                            openPopup(
+                                    "/com/dfms/dairy_farm_management_system/popups/milk_sale_details.fxml",
+                                    "Animal Sale Details",
+                                    controller -> {
+                                        MilkSaleDetailsController c = (MilkSaleDetailsController) controller;
+                                        c.fetchMilkSale(milkSale.getId(), milkSale.getQuantity(), milkSale.getPrice(), milkSale.getClientName(), milkSale.getSale_date());
+                                    }
+                            );
                         });
                     }
                 }
-
-
             };
             return cell;
         };
 
         action_c.setCellFactory(cellFoctory);
         MilkSaleTable.setItems(list);
-
     }
 
     private void refreshTableMilkSales() {
@@ -532,9 +480,6 @@ public class SalesController implements Initializable {
             throw new RuntimeException(e);
         }
     }
-
-    private Statement statemeent;
-    private Connection connection = getConnection();
 
     void exportToExcel() {
         FileChooser fileChooser = new FileChooser();
@@ -573,7 +518,7 @@ public class SalesController implements Initializable {
             header.createCell(3).setCellValue(CLIENT_LABEL);
             header.createCell(4).setCellValue("Date");
 
-            int rowNum = 1; // start after header
+            int rowNum = 1;
             while (rs.next()) {
                 Row row = sheet.createRow(rowNum++);
                 row.createCell(0).setCellValue(rs.getString("sale_id"));
@@ -590,8 +535,6 @@ public class SalesController implements Initializable {
             displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
     }
-
-    private static int COLUMNS_COUNT = 4;
 
     void exportToPDF() {
         FileChooser fileChooser = new FileChooser();
@@ -634,25 +577,10 @@ public class SalesController implements Initializable {
                 }
                 table.setWidths(colWidth);
 
-                table.addCell(new PdfPCell(new Paragraph(
-                        "Animal ID",
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
-                ))).setPadding(5);
-
-                table.addCell(new PdfPCell(new Paragraph(
-                        PRICE_LABEL,
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
-                ))).setPadding(5);
-
-                table.addCell(new PdfPCell(new Paragraph(
-                        CLIENT_LABEL,
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
-                ))).setPadding(5);
-
-                table.addCell(new PdfPCell(new Paragraph(
-                        "Sale's date",
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
-                ))).setPadding(5);
+                addPdfHeaderCell(table, "Animal ID");
+                addPdfHeaderCell(table, PRICE_LABEL);
+                addPdfHeaderCell(table, CLIENT_LABEL);
+                addPdfHeaderCell(table, "Sale's date");
 
                 table.getDefaultCell().setPadding(3);
                 table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
@@ -664,10 +592,10 @@ public class SalesController implements Initializable {
                 for (AnimalSale animalSale : animalSales) {
                     AnimalSale sale = controller.getSale(animalSale.getId());
 
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(sale.getAnimalId())))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(sale.getPrice())))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(sale.getClientName()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(sale.getSale_date())))).setPadding(5);
+                    addPdfCell(table, String.valueOf(sale.getAnimalId()));
+                    addPdfCell(table, String.valueOf(sale.getPrice()));
+                    addPdfCell(table, sale.getClientName());
+                    addPdfCell(table, String.valueOf(sale.getSale_date()));
                 }
 
                 document.add(table);
@@ -679,6 +607,17 @@ public class SalesController implements Initializable {
                 e.printStackTrace();
             }
         }
+    }
+
+    private void addPdfHeaderCell(PdfPTable table, String text) {
+        table.addCell(new PdfPCell(new Paragraph(
+                text,
+                FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
+        ))).setPadding(5);
+    }
+
+    private void addPdfCell(PdfPTable table, String text) {
+        table.addCell(new PdfPCell(new Paragraph(text))).setPadding(5);
     }
 
     public void liveSearch2(TextField search_input, TableView table) {
@@ -746,25 +685,10 @@ public class SalesController implements Initializable {
                 }
                 table.setWidths(colWidth);
 
-                table.addCell(new PdfPCell(new Paragraph(
-                        COLUMN_QUANTITY,
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
-                ))).setPadding(5);
-
-                table.addCell(new PdfPCell(new Paragraph(
-                        PRICE_LABEL,
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
-                ))).setPadding(5);
-
-                table.addCell(new PdfPCell(new Paragraph(
-                        CLIENT_LABEL,
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
-                ))).setPadding(5);
-
-                table.addCell(new PdfPCell(new Paragraph(
-                        "Sale's date",
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
-                ))).setPadding(5);
+                addPdfHeaderCell(table, COLUMN_QUANTITY);
+                addPdfHeaderCell(table, PRICE_LABEL);
+                addPdfHeaderCell(table, CLIENT_LABEL);
+                addPdfHeaderCell(table, "Sale's date");
 
                 table.getDefaultCell().setPadding(3);
                 table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
@@ -776,10 +700,10 @@ public class SalesController implements Initializable {
                 for (MilkSale milkSale : milkSales) {
                     MilkSale milksa = controller.getSale(milkSale.getId());
 
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(milksa.getQuantity())))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(milksa.getPrice())))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(milksa.getClientName()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(milksa.getSale_date())))).setPadding(5);
+                    addPdfCell(table, String.valueOf(milksa.getQuantity()));
+                    addPdfCell(table, String.valueOf(milksa.getPrice()));
+                    addPdfCell(table, milksa.getClientName());
+                    addPdfCell(table, String.valueOf(milksa.getSale_date()));
                 }
 
                 document.add(table);
@@ -832,7 +756,7 @@ public class SalesController implements Initializable {
             header.createCell(3).setCellValue(CLIENT_LABEL);
             header.createCell(4).setCellValue("Date");
 
-            int rowNum = 1; // start after header
+            int rowNum = 1;
             while (rs.next()) {
                 Row row = sheet.createRow(rowNum++);
                 row.createCell(0).setCellValue(rs.getString("sale_id"));
@@ -850,7 +774,6 @@ public class SalesController implements Initializable {
         }
     }
 
-
     @FXML
     void refreshTable(MouseEvent event) throws SQLException {
         refreshTableAnimalSales();
@@ -859,6 +782,5 @@ public class SalesController implements Initializable {
     @FXML
     void refreshTable2(MouseEvent event) {
         refreshTableMilkSales();
-
     }
 }
