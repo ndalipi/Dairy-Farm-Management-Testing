@@ -165,25 +165,29 @@ public class MilkSalesController implements Initializable {
 
     public MilkSale getSale(int milkSale_ID) {
         MilkSale milkSale = new MilkSale();
-        String query = "SELECT * FROM `milk_sales`   where id='" + milkSale_ID + "' LIMIT 1";
+
+        String query = "SELECT id, quantity, price, client_id, sale_date FROM milk_sales WHERE id = ? LIMIT 1";
 
         try (Connection con = getConnection();
-             Statement st = con.createStatement();
-             ResultSet rs = st.executeQuery(query)) {
+             PreparedStatement ps = con.prepareStatement(query)) {
 
-            while (rs.next()) {
-                milkSale.setId(rs.getInt("id"));
-                milkSale.setQuantity(rs.getFloat("quantity"));
-                milkSale.setPrice(rs.getFloat("price"));
-                milkSale.setClientId(rs.getInt("client_id"));
-                milkSale.setSale_date(rs.getDate("sale_date"));
+            ps.setInt(1, milkSale_ID);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    milkSale.setId(rs.getInt("id"));
+                    milkSale.setQuantity(rs.getFloat("quantity"));
+                    milkSale.setPrice(rs.getFloat("price"));
+                    milkSale.setClientId(rs.getInt("client_id"));
+                    milkSale.setSale_date(rs.getDate("sale_date"));
+                }
             }
 
-        } catch (Exception e) {
+        } catch (SQLException e) {
             displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-            e.printStackTrace();
         }
 
         return milkSale;
     }
+
 }
