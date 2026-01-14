@@ -7,6 +7,7 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.*;
+import javafx.scene.effect.DisplacementMap;
 import javafx.scene.input.MouseEvent;
 
 import java.net.URL;
@@ -16,13 +17,10 @@ import java.util.ResourceBundle;
 import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConnection;
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
+
 public class NewMilkCollectionController implements Initializable {
     private static final String ERROR_TITLE = "Error";
     private static final String SUCCESS_TITLE = "success";
-
-    private static final String SQL_SELECT_COW_IDS = "SELECT id FROM animals WHERE type = 'cow'";
-    private static final String SQL_SELECT_MILK_COLLECTION_BY_ID =
-            "SELECT id, quantity, period, cow_id FROM milk_collections WHERE id = ? LIMIT 1";
 
     @FXML
     private ComboBox<String> cowid;
@@ -32,56 +30,64 @@ public class NewMilkCollectionController implements Initializable {
 
     @FXML
     private ComboBox<String> period_input;
-
+    PreparedStatement st = null;
+    ResultSet rs = null;
     @FXML
     private Label header;
 
     @FXML
     private Label key;
 
+
     @FXML
     private Button Add_Update;
-
     private int MilkCollection_ID;
-    private boolean update;
 
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
+
         try {
             setCowComboItems();
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
 
-        setPeriodComboItems();
+        this.setPeriodComboItems();
         validateDecimalInput(milkquantity_input);
+
+
     }
 
     public void setPeriodComboItems() {
-        period_input.setItems(FXCollections.observableArrayList("morning", "evening"));
+        this.period_input.setItems(FXCollections.observableArrayList("morning", "evening"));
     }
 
     public void setCowComboItems() throws SQLException {
+
         ObservableList<String> cows = FXCollections.observableArrayList();
 
-        try (Connection con = DBConfig.getConnection();
-             PreparedStatement ps = con.prepareStatement(SQL_SELECT_COW_IDS);
-             ResultSet rs = ps.executeQuery()) {
+        String select_query = "SELECT id from animals  where type='cow';";
 
-            while (rs.next()) {
-                cows.add(rs.getString("id"));
-            }
+        st = DBConfig.getConnection().prepareStatement(select_query);
+        rs = st.executeQuery();
+        while (rs.next()) {
+
+            cows.add(rs.getString("id"));
         }
 
         cowid.setItems(cows);
     }
 
+    private boolean update;
+
     public void setUpdate(boolean b) {
+
         this.update = b;
     }
 
     @FXML
     public void addMilkCollection(MouseEvent mouseEvent) throws SQLException {
+
         if (period_input.getValue() == null || cowid.getValue() == null || milkquantity_input.getText().isEmpty()) {
             displayAlert(ERROR_TITLE, "Please Fill all field ", Alert.AlertType.ERROR);
             return;
@@ -128,6 +134,8 @@ public class NewMilkCollectionController implements Initializable {
         }
     }
 
+
+
     public void fetchMilkCollection(MilkCollection milkCollection) {
         this.MilkCollection_ID = milkCollection.getId();
         header.setText("Update Milk Collection");
@@ -149,6 +157,7 @@ public class NewMilkCollectionController implements Initializable {
         });
     }
 
+
     private void clear() {
         cowid.getSelectionModel().clearSelection();
         period_input.getSelectionModel().clearSelection();
@@ -159,19 +168,23 @@ public class NewMilkCollectionController implements Initializable {
     public MilkCollection getCollection(int milkCollection_ID) {
         MilkCollection milkCollection = new MilkCollection();
 
-        try (Connection con = getConnection();
-             PreparedStatement ps = con.prepareStatement(SQL_SELECT_MILK_COLLECTION_BY_ID)) {
+        String query = "SELECT * FROM `milk_collections` WHERE id = ? LIMIT 1";
 
+        try (
+                Connection con = getConnection();
+                PreparedStatement ps = con.prepareStatement(query)
+        ) {
             ps.setInt(1, milkCollection_ID);
 
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    milkCollection.setId(rs.getInt("id"));
-                    milkCollection.setQuantity(rs.getFloat("quantity"));
-                    milkCollection.setPeriod(rs.getString("period"));
-                    milkCollection.setCow_id(rs.getString("cow_id"));
+            try (ResultSet rsLocal = ps.executeQuery()) {
+                if (rsLocal.next()) {
+                    milkCollection.setId(rsLocal.getInt("id"));
+                    milkCollection.setQuantity(rsLocal.getFloat("quantity"));
+                    milkCollection.setPeriod(rsLocal.getString("period"));
+                    milkCollection.setCow_id(rsLocal.getString("cow_id"));
                 }
             }
+
         } catch (SQLException e) {
             displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
             e.printStackTrace();

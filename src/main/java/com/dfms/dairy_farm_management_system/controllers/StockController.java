@@ -2,7 +2,6 @@ package com.dfms.dairy_farm_management_system.controllers;
 
 import com.dfms.dairy_farm_management_system.Main;
 import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.UpdateProductController;
-import com.dfms.dairy_farm_management_system.models.Employee;
 import com.dfms.dairy_farm_management_system.models.Stock;
 import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.PdfPCell;
@@ -14,13 +13,6 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
-import javafx.print.*;
-
-import java.awt.print.*;
-
-import javafx.print.Paper;
-import javafx.print.PrinterJob;
-import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -28,11 +20,8 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
-import javafx.scene.transform.Rotate;
-import javafx.scene.transform.Scale;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import javafx.util.Callback;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -52,34 +41,41 @@ import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
 public class StockController implements Initializable {
 
-    @Override
-    public void initialize(URL url, ResourceBundle resourceBundle) {
-        //this line of code is so important for the export !!!!
-        BasicConfigurator.configure();
+    private static final String SUCCESS_TITLE = "Success";
+    private static final String ERROR_TITLE = "Error";
+    private static final String COLUMN_QUANTITY = "Quantity";
 
-        ObservableList<String> list = FXCollections.observableArrayList("PDF", "Excel");
-        export_combo.setItems(list);
-        displayStock();
+    private static final String ICON_STYLE = "-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;";
+    private static final String HBOX_CENTER_STYLE = "-fx-alignment:center";
+    private static final String LOGO_PATH = "file:src/main/resources/images/logo.png";
 
-        //check what user select in the combo box
-        export_combo.getSelectionModel().selectedItemProperty().addListener((observableValue, s, t1) -> {
-            if (t1.equals("PDF")) {
-                exportToPDF();
-            } else {
-                exportToExcel();
-            }
-        });
+    private static final String DELETE_PRODUCT_TITLE = "Delete Product";
+    private static final String DELETE_PRODUCT_HEADER = "Are you sure you want to delete this product?";
+    private static final String PRODUCT_DELETED_MSG = "Product deleted successfully";
 
-        liveSearch(search_stock_input, stock_table);
-    }
+    private static final String UPDATE_PRODUCT_TITLE = "Update Product";
+    private static final String UPDATE_PRODUCT_FXML = "/com/dfms/dairy_farm_management_system/popups/update_product.fxml";
 
-    private static int COLUMNS_COUNT = 7;
-    private Statement statement;
-    private PreparedStatement preparedStatement;
-    private Connection connection = getConnection();
+    private static final String ICON_EDIT_PATH = "/images/edit.png";
+    private static final String ICON_DELETE_PATH = "/images/delete.png";
+
+    private static final int COLUMNS_COUNT = 7;
+
+    private static final String EXPORT_QUERY =
+            "SELECT id, name, type, Quantity, unit, created_at FROM stocks";
+
+    private static final String[] EXPORT_HEADERS = {
+            "Product ID",
+            "Product Name",
+            "Product Type",
+            COLUMN_QUANTITY,
+            "Availability",
+            "Unit",
+            "Added Date"
+    };
+
     @FXML
     private TableColumn<Stock, String> actions_col;
-
 
     @FXML
     private TableColumn<Stock, String> product_qunatity_col;
@@ -108,154 +104,162 @@ public class StockController implements Initializable {
     @FXML
     private TableView<Stock> stock_table;
 
+    @Override
+    public void initialize(URL url, ResourceBundle resourceBundle) {
+        //this line of code is so important for the export !!!!
+        BasicConfigurator.configure();
+
+        ObservableList<String> list = FXCollections.observableArrayList("PDF", "Excel");
+        export_combo.setItems(list);
+        displayStock();
+
+        export_combo.getSelectionModel().selectedItemProperty().addListener((observableValue, s, t1) -> {
+            if (t1.equals("PDF")) {
+                exportToPDF();
+            } else {
+                exportToExcel();
+            }
+        });
+
+        liveSearch(search_stock_input, stock_table);
+    }
+
     public ObservableList<Stock> getProducts() {
         ObservableList<Stock> products = FXCollections.observableArrayList();
-        String query = "SELECT * FROM stocks";
-        try {
-            statement = connection.createStatement();
-            ResultSet rs = statement.executeQuery(query);
+
+        String query = "SELECT id, name, type, Quantity, unit FROM stocks";
+
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(query);
+             ResultSet rs = ps.executeQuery()) {
+
             while (rs.next()) {
                 Stock product = new Stock();
+
                 product.setId(rs.getInt("id"));
                 product.setName(rs.getString("name"));
                 product.setType(rs.getString("type"));
-                if (rs.getInt("quantity") > 0) {
-                    product.setAvailability(true);
-                } else {
-                    product.setAvailability(false);
-                }
-                product.setQuantity(rs.getFloat("quantity"));
+
+                float quantity = rs.getFloat(COLUMN_QUANTITY);
+                product.setQuantity(quantity);
+                product.setAvailability(quantity > 0);
+
                 product.setUnit(rs.getString("unit"));
                 products.add(product);
             }
-        } catch (Exception e) {
-            displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-            e.printStackTrace();
+
+        } catch (SQLException e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
+
         return products;
     }
 
     public void displayStock() {
         ObservableList<Stock> products = getProducts();
+
         id_col.setCellValueFactory(new PropertyValueFactory<>("id"));
         product_name_col.setCellValueFactory(new PropertyValueFactory<>("name"));
         product_type_col.setCellValueFactory(new PropertyValueFactory<>("type"));
-        product_qunatity_col.setCellValueFactory(new PropertyValueFactory<>("quantity"));
+        product_qunatity_col.setCellValueFactory(new PropertyValueFactory<>(COLUMN_QUANTITY));
         availability_col.setCellValueFactory(new PropertyValueFactory<>("availability"));
-        Callback<TableColumn<Stock, String>, TableCell<Stock, String>> cellFoctory = (TableColumn<Stock, String> param) -> {
-            final TableCell<Stock, String> cell = new TableCell<Stock, String>() {
-                Image edit_img = new Image(getClass().getResourceAsStream("/images/edit.png"));
-                Image delete_img = new Image(getClass().getResourceAsStream("/images/delete.png"));
-                //Image view_details_img = new Image(getClass().getResourceAsStream("/images/eye.png"));
 
-                @Override
-                protected void updateItem(String item, boolean empty) {
-                    super.updateItem(item, empty);
-                    //that cell created only on non-empty rows
-                    if (empty) {
-                        setGraphic(null);
-                        setText(null);
-                    } else {
-                        //ImageView iv_view_details = new ImageView();
-                        //iv_view_details.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
-                        //iv_view_details.setImage(view_details_img);
-                        //iv_view_details.setPreserveRatio(true);
-                        //iv_view_details.setSmooth(true);
-                        //iv_view_details.setCache(true);
-
-
-                        ImageView iv_edit = new ImageView();
-                        iv_edit.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
-                        iv_edit.setImage(edit_img);
-                        iv_edit.setPreserveRatio(true);
-                        iv_edit.setSmooth(true);
-                        iv_edit.setCache(true);
-
-                        ImageView iv_delete = new ImageView();
-                        iv_delete.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
-
-                        iv_delete.setImage(delete_img);
-                        iv_delete.setPreserveRatio(true);
-                        iv_delete.setSmooth(true);
-                        iv_delete.setCache(true);
-
-                        HBox managebtn = new HBox(iv_edit, iv_delete);
-                        managebtn.setStyle("-fx-alignment:center");
-                        //HBox.setMargin(iv_view_details, new Insets(1, 1, 0, 3));
-                        HBox.setMargin(iv_delete, new Insets(1, 1, 0, 3));
-                        HBox.setMargin(iv_edit, new Insets(1, 1, 0, 3));
-
-                        setGraphic(managebtn);
-
-                        //delete product
-                        iv_delete.setOnMouseClicked((MouseEvent event) -> {
-                            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                            alert.setTitle("Delete Product");
-                            alert.setHeaderText("Are you sure you want to delete this product?");
-                            Stock product = stock_table.getSelectionModel().getSelectedItem();
-                            Optional<ButtonType> result = alert.showAndWait();
-                            if (result.get() == ButtonType.OK) {
-                                try {
-                                    if (product.delete()) {
-                                        displayAlert("Success", "Product deleted successfully", Alert.AlertType.INFORMATION);
-                                        displayStock();
-                                    }
-                                } catch (Exception e) {
-                                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                                }
-                            }
-                        });
-
-                        //update employee
-                        iv_edit.setOnMouseClicked((MouseEvent event) -> {
-                            Stock product = stock_table.getSelectionModel().getSelectedItem();
-                            FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/update_product.fxml"));
-                            Scene scene = null;
-                            try {
-                                scene = new Scene(fxmlLoader.load());
-                                UpdateProductController controller = fxmlLoader.getController();
-                                controller.fetchProduct(product);
-                            } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                                e.printStackTrace();
-                            }
-                            Stage stage = new Stage();
-                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
-                            stage.setTitle("Update Product");
-                            stage.setResizable(false);
-                            stage.setScene(scene);
-                            centerScreen(stage);
-                            stage.show();
-                        });
-
-                        //view employee details
-//                        iv_view_details.setOnMouseClicked((MouseEvent event) -> {
-//                            Stock product = stock_table.getSelectionModel().getSelectedItem();
-//                            FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/employee_details.fxml"));
-//                            Scene scene = null;
-//                            try {
-//                                scene = new Scene(fxmlLoader.load());
-//                                ProductDetailsController controller = fxmlLoader.getController();
-//                                controller.fetchProduct(product);
-//                            } catch (IOException e) {
-//                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-//                                e.printStackTrace();
-//                            }
-//                            Stage stage = new Stage();
-//                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
-//                            stage.setTitle("Product Details");
-//                            stage.setResizable(false);
-//                            stage.setScene(scene);
-//                            centerScreen(stage);
-//                            stage.show();
-//                        });
-                    }
-                }
-            };
-            return cell;
-        };
-        actions_col.setCellFactory(cellFoctory);
+        actions_col.setCellFactory(col -> new ActionCell());
         stock_table.setItems(products);
+    }
+
+    private class ActionCell extends TableCell<Stock, String> {
+
+        private final Image editImg = new Image(getClass().getResourceAsStream(ICON_EDIT_PATH));
+        private final Image deleteImg = new Image(getClass().getResourceAsStream(ICON_DELETE_PATH));
+
+        @Override
+        protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+
+            if (empty) {
+                setGraphic(null);
+                setText(null);
+                return;
+            }
+
+            ImageView ivEdit = buildIcon(editImg);
+            ImageView ivDelete = buildIcon(deleteImg);
+
+            setGraphic(buildActionsBox(ivEdit, ivDelete));
+            setText(null);
+
+            ivDelete.setOnMouseClicked(event -> handleDeleteProduct(getSelectedProduct()));
+            ivEdit.setOnMouseClicked(event -> handleEditProduct(getSelectedProduct()));
+        }
+
+        private ImageView buildIcon(Image img) {
+            ImageView iv = new ImageView(img);
+            iv.setStyle(ICON_STYLE);
+            iv.setPreserveRatio(true);
+            iv.setSmooth(true);
+            iv.setCache(true);
+            return iv;
+        }
+
+        private HBox buildActionsBox(ImageView... icons) {
+            HBox box = new HBox(icons);
+            box.setStyle(HBOX_CENTER_STYLE);
+            for (ImageView iv : icons) {
+                HBox.setMargin(iv, new Insets(1, 1, 0, 3));
+            }
+            return box;
+        }
+
+        private Stock getSelectedProduct() {
+            return stock_table.getSelectionModel().getSelectedItem();
+        }
+
+        private boolean userConfirmedDelete() {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle(DELETE_PRODUCT_TITLE);
+            alert.setHeaderText(DELETE_PRODUCT_HEADER);
+
+            Optional<ButtonType> result = alert.showAndWait();
+            return result.isPresent() && result.get() == ButtonType.OK;
+        }
+
+        private void handleDeleteProduct(Stock product) {
+            if (product == null) return;
+            if (!userConfirmedDelete()) return;
+
+            try {
+                if (product.delete()) {
+                    displayAlert(SUCCESS_TITLE, PRODUCT_DELETED_MSG, Alert.AlertType.INFORMATION);
+                    displayStock();
+                }
+            } catch (Exception e) {
+                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            }
+        }
+
+        private void handleEditProduct(Stock product) {
+            if (product == null) return;
+
+            try {
+                FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource(UPDATE_PRODUCT_FXML));
+                Scene scene = new Scene(fxmlLoader.load());
+
+                UpdateProductController controller = fxmlLoader.getController();
+                controller.fetchProduct(product);
+
+                Stage stage = new Stage();
+                stage.getIcons().add(new Image(LOGO_PATH));
+                stage.setTitle(UPDATE_PRODUCT_TITLE);
+                stage.setResizable(false);
+                stage.setScene(scene);
+                centerScreen(stage);
+                stage.show();
+
+            } catch (IOException e) {
+                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+            }
+        }
     }
 
     @FXML
@@ -272,50 +276,49 @@ public class StockController implements Initializable {
     void exportToExcel() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"), new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"),
+                new FileChooser.ExtensionFilter("CSV Files", "*.csv")
+        );
+
         File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try {
-                Workbook workbook = new XSSFWorkbook();
-                Sheet sheet = workbook.createSheet("Stock");
-                Row header = sheet.createRow(0);
-                header.createCell(0).setCellValue("Product ID");
-                header.createCell(1).setCellValue("Product Name");
-                header.createCell(2).setCellValue("Product Type");
-                header.createCell(3).setCellValue("Quantity");
-                header.createCell(4).setCellValue("Availability");
-                header.createCell(5).setCellValue("Unit");
-                header.createCell(6).setCellValue("Added Date");
+        if (file == null) {
+            return;
+        }
 
-                //get all employees from database
-                String query = "SELECT * FROM `stocks`";
-                try {
-                    statement = connection.createStatement();
-                    ResultSet rs = statement.executeQuery(query);
-                    while (rs.next()) {
-                        int rowNum = rs.getRow();
-                        Row row = sheet.createRow(rowNum);
-                        row.createCell(0).setCellValue(rs.getString("id"));
-                        row.createCell(1).setCellValue(rs.getString("name"));
-                        row.createCell(2).setCellValue(rs.getString("type"));
-                        row.createCell(3).setCellValue(rs.getString("quantity"));
-                        row.createCell(4).setCellValue(rs.getString("availability"));
-                        row.createCell(5).setCellValue(rs.getString("unit"));
-                        row.createCell(6).setCellValue(rs.getString("created_at"));
-                    }
-                } catch (Exception e) {
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                }
+        try (Workbook workbook = new XSSFWorkbook();
+             FileOutputStream fileOutputStream = new FileOutputStream(file);
+             Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(EXPORT_QUERY);
+             ResultSet rs = ps.executeQuery()) {
 
+            Sheet sheet = workbook.createSheet("Stock");
+            Row header = sheet.createRow(0);
 
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                workbook.write(fileOutputStream);
-                workbook.close();
-
-                displayAlert("Success", "Stock exported successfully", Alert.AlertType.INFORMATION);
-            } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+            for (int i = 0; i < EXPORT_HEADERS.length; i++) {
+                header.createCell(i).setCellValue(EXPORT_HEADERS[i]);
             }
+
+            int rowNum = 1;
+            while (rs.next()) {
+                Row row = sheet.createRow(rowNum++);
+
+                float quantity = rs.getFloat(COLUMN_QUANTITY);
+
+                row.createCell(0).setCellValue(rs.getString("id"));
+                row.createCell(1).setCellValue(rs.getString("name"));
+                row.createCell(2).setCellValue(rs.getString("type"));
+                row.createCell(3).setCellValue(String.valueOf(quantity));
+                row.createCell(4).setCellValue(quantity > 0 ? "Available" : "Not Available");
+                row.createCell(5).setCellValue(rs.getString("unit"));
+                row.createCell(6).setCellValue(rs.getString("created_at"));
+            }
+
+            workbook.write(fileOutputStream);
+            displayAlert(SUCCESS_TITLE, "Stock exported successfully", Alert.AlertType.INFORMATION);
+
+        } catch (Exception e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
     }
 
@@ -325,80 +328,61 @@ public class StockController implements Initializable {
         fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
         File file = fileChooser.showSaveDialog(null);
         if (file != null) {
-            try {
-                Document document = new Document();
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(EXPORT_QUERY);
+                 ResultSet rs = ps.executeQuery()) {
 
-                //change document orientation to landscape
+                Document document = new Document();
                 document.setPageSize(PageSize.A4.rotate());
 
                 PdfWriter.getInstance(document, new FileOutputStream(file));
                 document.open();
-                try {
-                    Paragraph title = new Paragraph("Stock List", FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK));
-                    Paragraph text = new Paragraph("This is the list of the products", FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK));
 
-                    //center paragraph
-                    title.setAlignment(Element.ALIGN_CENTER);
-                    text.setAlignment(Element.ALIGN_CENTER);
-                    title.setSpacingAfter(30);
-                    text.setSpacingAfter(30);
+                Paragraph title = new Paragraph("Stock List", FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK));
+                Paragraph text = new Paragraph("This is the list of the products", FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK));
 
-                    document.add(title);
-                    document.add(text);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                }
+                title.setAlignment(Element.ALIGN_CENTER);
+                text.setAlignment(Element.ALIGN_CENTER);
+                title.setSpacingAfter(30);
+                text.setSpacingAfter(30);
+
+                document.add(title);
+                document.add(text);
+
                 PdfPTable table = new PdfPTable(COLUMNS_COUNT);
-
-                //change pdf orientation to landscape
                 table.setWidthPercentage(100);
                 table.setSpacingBefore(11f);
                 table.setSpacingAfter(11f);
+
                 float[] colWidth = new float[COLUMNS_COUNT];
                 for (int i = 0; i < COLUMNS_COUNT; i++) {
                     colWidth[i] = 2f;
                 }
                 table.setWidths(colWidth);
 
-                //add table headers
-                table.addCell(new PdfPCell(new Paragraph("Product ID", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Product Name", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Product Type", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Quantity", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Availability", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Unit", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Added Date", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                for (String header : EXPORT_HEADERS) {
+                    PdfPCell cell = new PdfPCell(new Paragraph(header, FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)));
+                    cell.setPadding(5);
+                    table.addCell(cell);
+                }
 
-                //add padding to cells
-                table.getDefaultCell().setPadding(3);
-                table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
+                while (rs.next()) {
+                    float quantity = rs.getFloat(COLUMN_QUANTITY);
 
-                //get employees displayed in table
-                ObservableList<Stock> stock = stock_table.getItems();
-
-                //get product of each row
-                //used a method in my updateProductController to get the product of each row based on the id
-                UpdateProductController controller = new UpdateProductController();
-
-                for (Stock s : stock) {
-                    Stock product = controller.getProduct(s.getId());
-                    System.out.println(product.toString());
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(product.getId())))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(product.getName()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(product.getType()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(product.getQuantity())))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(product.getAvailability()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(product.getUnit()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(product.getCreatedAt())))).setPadding(5);
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("id"))));
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("name"))));
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("type"))));
+                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(quantity))));
+                    table.addCell(new PdfPCell(new Paragraph(quantity > 0 ? "Available" : "Not Available")));
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("unit"))));
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("created_at"))));
                 }
 
                 document.add(table);
                 document.close();
-                displayAlert("Success", "Stock exported successfully", Alert.AlertType.INFORMATION);
+                displayAlert(SUCCESS_TITLE, "Stock exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
     }
@@ -411,7 +395,8 @@ public class StockController implements Initializable {
                 ObservableList<Stock> filteredList = FXCollections.observableArrayList();
                 ObservableList<Stock> products = getProducts();
                 for (Stock product : products) {
-                    if (product.getName().toLowerCase().contains(newValue.toLowerCase()) || product.getType().toLowerCase().contains(newValue.toLowerCase())) {
+                    if (product.getName().toLowerCase().contains(newValue.toLowerCase())
+                            || product.getType().toLowerCase().contains(newValue.toLowerCase())) {
                         filteredList.add(product);
                     }
                 }
