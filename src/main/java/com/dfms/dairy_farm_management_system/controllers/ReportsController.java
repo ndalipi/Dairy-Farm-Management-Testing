@@ -1,7 +1,5 @@
 package com.dfms.dairy_farm_management_system.controllers;
 
-import com.dfms.dairy_farm_management_system.controllers.pop_ups_controllers.NewPurchaseController;
-import com.dfms.dairy_farm_management_system.models.Animal;
 import com.dfms.dairy_farm_management_system.models.AnimalSale;
 import com.dfms.dairy_farm_management_system.models.MilkSale;
 import com.dfms.dairy_farm_management_system.models.Purchase;
@@ -11,7 +9,6 @@ import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
@@ -28,6 +25,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.URL;
 import java.sql.*;
 import java.time.LocalDate;
@@ -38,7 +36,20 @@ import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConne
 import static com.dfms.dairy_farm_management_system.helpers.Helper.displayAlert;
 
 public class ReportsController implements Initializable {
-//  milk collection part
+    //  milk collection part
+    private static final String TITLE_SUCCESS = "Success";
+    private static final String TITLE_ERROR = "Error";
+
+    private static final String LABEL_EXCEL = "Excel";
+    private static final String LABEL_EXCEL_FILES = "Excel Files";
+    private static final String LABEL_CSV_FILES = "CSV Files";
+
+    private static final String EXT_XLSX = "*.xlsx";
+    private static final String EXT_CSV = "*.csv";
+
+    private static final String COL_PRICE = "Price";
+    private static final String COL_CLIENT = "Client";
+
     @FXML
     private DatePicker from_date_picker;
 
@@ -223,7 +234,6 @@ public class ReportsController implements Initializable {
                 }
             });
         });
-
     }
 
     private ObservableList<DailyMilkCollection> getData() {
@@ -235,10 +245,10 @@ public class ReportsController implements Initializable {
         try {
             String query =
                     "SELECT `created_at` AS collection_date, " +
-                    "sum(`quantity`) AS morning_collection " +
-                    "FROM `milk_collections` WHERE `period` = ? AND `created_at` <= ? AND `created_at` >= ? " +
-                    "GROUP BY date(created_at) " +
-                    "ORDER BY `created_at` DESC";
+                            "sum(`quantity`) AS morning_collection " +
+                            "FROM `milk_collections` WHERE `period` = ? AND `created_at` <= ? AND `created_at` >= ? " +
+                            "GROUP BY date(created_at) " +
+                            "ORDER BY `created_at` DESC";
 
             PreparedStatement statement = getConnection().prepareStatement(query);
 
@@ -287,7 +297,7 @@ public class ReportsController implements Initializable {
         milk_collection_results_area.getChildren().clear();
         milk_collection_results_area.setPrefSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
 
-        ComboBox<String> export_combo = new ComboBox<>(FXCollections.observableArrayList("Excel", "PDF"));
+        ComboBox<String> export_combo = new ComboBox<>(FXCollections.observableArrayList(LABEL_EXCEL, "PDF"));
         export_combo.setPromptText("Export");
         export_combo.setPadding(new Insets(8));
         export_combo.getStyleClass().add("combo_box");
@@ -330,7 +340,7 @@ public class ReportsController implements Initializable {
     private void exportToExcel() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save as");
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"), new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter(LABEL_EXCEL_FILES, EXT_XLSX), new FileChooser.ExtensionFilter(LABEL_CSV_FILES, EXT_CSV));
         File file = fileChooser.showSaveDialog(null);
         if (file != null) {
             try {
@@ -356,9 +366,9 @@ public class ReportsController implements Initializable {
                 workbook.write(fileOutputStream);
                 workbook.close();
 
-                displayAlert("Success", "Report exported successfully", Alert.AlertType.INFORMATION);
+                displayAlert(TITLE_SUCCESS, "Report exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
     }
@@ -392,7 +402,7 @@ public class ReportsController implements Initializable {
                     document.add(text);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                    displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
                 }
                 PdfPTable table = new PdfPTable(COLUMNS_COUNT);
 
@@ -425,9 +435,9 @@ public class ReportsController implements Initializable {
 
                 document.add(table);
                 document.close();
-                displayAlert("Success", "Employees exported successfully", Alert.AlertType.INFORMATION);
+                displayAlert(TITLE_SUCCESS, "Employees exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
     }
@@ -506,7 +516,7 @@ public class ReportsController implements Initializable {
 
         try {
             String query =
-                   " SELECT * FROM `purchases` WHERE  `purchase_date` <= ? AND `purchase_date` >= ? " +
+                    " SELECT * FROM `purchases` WHERE  `purchase_date` <= ? AND `purchase_date` >= ? " +
                             "GROUP BY date(purchase_date) " +
                             "ORDER BY `purchase_date` DESC";
 
@@ -525,7 +535,7 @@ public class ReportsController implements Initializable {
                 purchase.setSupplier_id(resultSet.getInt("supplier_id"));
                 purchase.setStock_id(resultSet.getInt("stock_id"));
 
-                purchase.setPrice(resultSet.getFloat("price"));
+                purchase.setPrice(resultSet.getFloat(COL_PRICE));
                 data.add(purchase);
             }
 
@@ -542,7 +552,7 @@ public class ReportsController implements Initializable {
         purchase_results_area.getChildren().clear();
         purchase_results_area.setPrefSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
 
-        ComboBox<String> export_combo = new ComboBox<>(FXCollections.observableArrayList("Excel", "PDF"));
+        ComboBox<String> export_combo = new ComboBox<>(FXCollections.observableArrayList(LABEL_EXCEL, "PDF"));
         export_combo.setPromptText("Export");
         export_combo.setPadding(new Insets(8));
         export_combo.getStyleClass().add("combo_box");
@@ -569,8 +579,8 @@ public class ReportsController implements Initializable {
         quantity.setPrefWidth(180);
 
 
-        TableColumn<Purchase, Float> price = new TableColumn<>("Price");
-        price.setCellValueFactory(new PropertyValueFactory<Purchase, Float>("price"));
+        TableColumn<Purchase, Float> price = new TableColumn<>(COL_PRICE);
+        price.setCellValueFactory(new PropertyValueFactory<Purchase, Float>(COL_PRICE));
         price.setPrefWidth(180);
 
         TableColumn<Purchase, String> supplier = new TableColumn<>("Supplier");
@@ -592,7 +602,7 @@ public class ReportsController implements Initializable {
     private void exportToExcel2() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"), new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter(LABEL_EXCEL_FILES, EXT_XLSX), new FileChooser.ExtensionFilter(LABEL_CSV_FILES, EXT_CSV));
         File file = fileChooser.showSaveDialog(null);
         if (file != null) {
             try {
@@ -601,11 +611,10 @@ public class ReportsController implements Initializable {
                 Row header = sheet.createRow(0);
                 header.createCell(0).setCellValue("Purchase ID");
                 header.createCell(1).setCellValue("Product");
-                header.createCell(2).setCellValue("Price");
+                header.createCell(2).setCellValue(COL_PRICE);
                 header.createCell(3).setCellValue("Quantity");
                 header.createCell(4).setCellValue("Supplier");
                 header.createCell(5).setCellValue("Date");
-
 
                 //get all employees from database
                 String query = "SELECT pur.id,st.name,pur.price,s.name,pur.purchase_date,pur.quantity FROM `purchases` pur ,`suppliers` s , `stocks` st where pur.supplier_id=s.id and pur.stock_id=st.id  ";
@@ -625,7 +634,7 @@ public class ReportsController implements Initializable {
 
                     }
                 } catch (Exception e) {
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                    displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
                 }
 
 
@@ -633,9 +642,9 @@ public class ReportsController implements Initializable {
                 workbook.write(fileOutputStream);
                 workbook.close();
 
-                displayAlert("Success", "Purchases exported successfully", Alert.AlertType.INFORMATION);
+                displayAlert(TITLE_SUCCESS, "Purchases exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
 
@@ -668,7 +677,7 @@ public class ReportsController implements Initializable {
                     document.add(text);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                    displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
                 }
                 PdfPTable table = new PdfPTable(COLUMNS_COUNT);
 
@@ -683,7 +692,7 @@ public class ReportsController implements Initializable {
 
                 //add table header
                 table.addCell(new PdfPCell(new Paragraph("Product ", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Price", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(COL_PRICE, FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
                 table.addCell(new PdfPCell(new Paragraph("Quantity", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
                 table.addCell(new PdfPCell(new Paragraph("Supplier", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
                 table.addCell(new PdfPCell(new Paragraph("Date", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
@@ -693,16 +702,7 @@ public class ReportsController implements Initializable {
                 table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
                 table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
 
-
-
-
-                //get employee of each row
-                //used a method in my updateEmplyeeController to get the employee of each row based on the cin
-              /*  NewPurchaseController controller = new NewPurchaseController();*/
-
                 for (Purchase purchase : getDataPurchase()) {
-                   /* Purchase pur = controller.getPurchase(purchase.getId());*/
-
                     table.addCell(new PdfPCell(new Paragraph(purchase.getProduct_name()))).setPadding(5);
                     table.addCell(new PdfPCell(new Paragraph(String.valueOf(purchase.getPrice())))).setPadding(5);
                     table.addCell(new PdfPCell(new Paragraph(String.valueOf(purchase.getQuantity())))).setPadding(5);
@@ -713,9 +713,9 @@ public class ReportsController implements Initializable {
 
                 document.add(table);
                 document.close();
-                displayAlert("Success", "Purchases exported successfully", Alert.AlertType.INFORMATION);
+                displayAlert(TITLE_SUCCESS, "Purchases exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
     }
@@ -801,7 +801,6 @@ public class ReportsController implements Initializable {
 
             PreparedStatement statement = getConnection().prepareStatement(query);
 
-
             statement.setTimestamp(1, Timestamp.valueOf(max_date.atTime(23, 59, 59)));
             statement.setTimestamp(2, Timestamp.valueOf(min_date.atStartOfDay()));
 
@@ -812,7 +811,7 @@ public class ReportsController implements Initializable {
                 milkSale.setId(resultSet.getInt("id"));
                 milkSale.setSale_date(resultSet.getDate("sale_date"));
                 milkSale.setQuantity(resultSet.getFloat("quantity"));
-                milkSale.setPrice(resultSet.getInt("price"));
+                milkSale.setPrice(resultSet.getInt(COL_PRICE));
                 milkSale.setClientId(resultSet.getInt("client_id"));
                 data.add(milkSale);
             }
@@ -827,10 +826,10 @@ public class ReportsController implements Initializable {
     }
 
     private void displayDataMilkSales() {
-       sales_results_area.getChildren().clear();
-       sales_results_area.setPrefSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
+        sales_results_area.getChildren().clear();
+        sales_results_area.setPrefSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
 
-        ComboBox<String> export_combo = new ComboBox<>(FXCollections.observableArrayList("Excel", "PDF"));
+        ComboBox<String> export_combo = new ComboBox<>(FXCollections.observableArrayList(LABEL_EXCEL, "PDF"));
         export_combo.setPromptText("Export");
         export_combo.setPadding(new Insets(8));
         export_combo.getStyleClass().add("combo_box");
@@ -855,12 +854,11 @@ public class ReportsController implements Initializable {
         quantity.setCellValueFactory(new PropertyValueFactory<MilkSale, Float>("quantity"));
         quantity.setPrefWidth(180);
 
-
-        TableColumn<MilkSale, Float> price = new TableColumn<>("Price");
-        price.setCellValueFactory(new PropertyValueFactory<MilkSale, Float>("price"));
+        TableColumn<MilkSale, Float> price = new TableColumn<>(COL_PRICE);
+        price.setCellValueFactory(new PropertyValueFactory<MilkSale, Float>(COL_PRICE));
         price.setPrefWidth(180);
 
-        TableColumn<MilkSale, String> client= new TableColumn<>("Client");
+        TableColumn<MilkSale, String> client= new TableColumn<>(COL_CLIENT);
         client.setCellValueFactory(new PropertyValueFactory<MilkSale, String>("clientName"));
         client.setPrefWidth(180);
 
@@ -871,14 +869,14 @@ public class ReportsController implements Initializable {
         data_table.setItems(getDataSales());
         data_table.setPrefSize(900, 400);
 
-       sales_results_area.getChildren().addAll(export_combo, data_table);
+        sales_results_area.getChildren().addAll(export_combo, data_table);
     }
     private static int COLUMNS_COUNT_Table_MilkSales= 5;
 
     private void exportToExcelMilkSales() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"), new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter(LABEL_EXCEL_FILES, EXT_XLSX), new FileChooser.ExtensionFilter(LABEL_CSV_FILES, EXT_CSV));
         File file = fileChooser.showSaveDialog(null);
         if (file != null) {
             try {
@@ -888,8 +886,8 @@ public class ReportsController implements Initializable {
                 header.createCell(1).setCellValue("Sale ID");
                 header.createCell(2).setCellValue("Date");
                 header.createCell(3).setCellValue("Quantity");
-                header.createCell(4).setCellValue("Price");
-                header.createCell(5).setCellValue("Client");
+                header.createCell(4).setCellValue(COL_PRICE);
+                header.createCell(5).setCellValue(COL_CLIENT);
 
 
                 for (MilkSale milkSale: getDataSales()) {
@@ -905,12 +903,11 @@ public class ReportsController implements Initializable {
                 workbook.write(fileOutputStream);
                 workbook.close();
 
-                displayAlert("Success", "Report exported successfully", Alert.AlertType.INFORMATION);
+                displayAlert(TITLE_SUCCESS, "Report exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
-
     }
 
     private void exportToPDFMilkSales(LocalDate start, LocalDate end) {
@@ -940,7 +937,7 @@ public class ReportsController implements Initializable {
                     document.add(text);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                    displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
                 }
                 PdfPTable table = new PdfPTable(COLUMNS_COUNT_Table_MilkSales);
 
@@ -957,39 +954,27 @@ public class ReportsController implements Initializable {
                 table.addCell(new PdfPCell(new Paragraph("ID", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
                 table.addCell(new PdfPCell(new Paragraph("Date", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
                 table.addCell(new PdfPCell(new Paragraph("Quantity", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Price", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Client", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-
+                table.addCell(new PdfPCell(new Paragraph(COL_PRICE, FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(COL_CLIENT, FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
 
                 //add padding to cells
                 table.getDefaultCell().setPadding(3);
                 table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
                 table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
 
-
-
-
-                //get employee of each row
-                //used a method in my updateEmplyeeController to get the employee of each row based on the cin
-                /*  NewPurchaseController controller = new NewPurchaseController();*/
-
                 for (MilkSale milkSale : getDataSales()) {
-                    /* Purchase pur = controller.getPurchase(purchase.getId());*/
-
                     table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkSale.getId())))).setPadding(5);
                     table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkSale.getSale_date())))).setPadding(5);
                     table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkSale.getQuantity())))).setPadding(5);
                     table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkSale.getPrice())))).setPadding(5);
                     table.addCell(new PdfPCell(new Paragraph(milkSale.getClientName()))).setPadding(5);
-
-
                 }
 
                 document.add(table);
                 document.close();
-                displayAlert("Success", "Milk Sales exported successfully", Alert.AlertType.INFORMATION);
+                displayAlert(TITLE_SUCCESS, "Milk Sales exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
     }
@@ -1026,7 +1011,7 @@ public class ReportsController implements Initializable {
 
         to_date_animal_sales.setOnAction(event -> {
             LocalDate date = to_date_animal_sales.getValue();
-           end_animal_sales= to_date_animal_sales.getValue();
+            end_animal_sales= to_date_animal_sales.getValue();
             from_date_animal_sales.setDayCellFactory(d -> new DateCell() {
                 /**
                  * {@inheritDoc}
@@ -1062,40 +1047,39 @@ public class ReportsController implements Initializable {
 
     }
     private ObservableList<AnimalSale> getDataAnimalSales() {
-        LocalDate min_date = from_date_animal_sales.getValue();
-        LocalDate max_date = to_date_animal_sales.getValue();
+        LocalDate minDate = from_date_animal_sales.getValue();
+        LocalDate maxDate = to_date_animal_sales.getValue();
 
         ObservableList<AnimalSale> data = FXCollections.observableArrayList();
 
-        try {
-            String query =
-                    " SELECT * FROM `animals_sales` WHERE  `sale_date` <= ? AND `sale_date` >= ? " +
-                            "GROUP BY date(sale_date) " +
-                            "ORDER BY `sale_date` DESC";
+        String query =
+                "SELECT * FROM `animals_sales` WHERE `sale_date` <= ? AND `sale_date` >= ? " +
+                        "GROUP BY DATE(`sale_date`) " +
+                        "ORDER BY `sale_date` DESC";
 
-            PreparedStatement statement = getConnection().prepareStatement(query);
+        try (
+                Connection con = getConnection();
+                PreparedStatement statement = con.prepareStatement(query)
+        ) {
+            statement.setTimestamp(1, Timestamp.valueOf(maxDate.atTime(23, 59, 59)));
+            statement.setTimestamp(2, Timestamp.valueOf(minDate.atStartOfDay()));
 
-
-            statement.setTimestamp(1, Timestamp.valueOf(max_date.atTime(23, 59, 59)));
-            statement.setTimestamp(2, Timestamp.valueOf(min_date.atStartOfDay()));
-
-            ResultSet resultSet = statement.executeQuery();
-
-            while (resultSet.next()) {
-                AnimalSale animalSale = new AnimalSale();
-                animalSale.setAnimalId(resultSet.getString("animal_id"));
-                animalSale.setSale_date(resultSet.getDate("sale_date"));
-                animalSale.setPrice(resultSet.getInt("price"));
-                animalSale.setClientId(resultSet.getInt("client_id"));
-                data.add(animalSale);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    AnimalSale animalSale = new AnimalSale();
+                    animalSale.setAnimalId(resultSet.getString("animal_id"));
+                    animalSale.setSale_date(resultSet.getDate("sale_date"));
+                    animalSale.setPrice(resultSet.getInt(COL_PRICE));
+                    animalSale.setClientId(resultSet.getInt("client_id"));
+                    data.add(animalSale);
+                }
             }
 
         } catch (SQLException e) {
             System.out.println(e.getMessage());
             System.out.println(e.getSQLState());
-        } finally {
-            disconnect();
         }
+
         return data;
     }
 
@@ -1103,7 +1087,7 @@ public class ReportsController implements Initializable {
         animal_sales_results_area.getChildren().clear();
         animal_sales_results_area.setPrefSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
 
-        ComboBox<String> export_combo = new ComboBox<>(FXCollections.observableArrayList("Excel", "PDF"));
+        ComboBox<String> export_combo = new ComboBox<>(FXCollections.observableArrayList(LABEL_EXCEL, "PDF"));
         export_combo.setPromptText("Export");
         export_combo.setPadding(new Insets(8));
         export_combo.getStyleClass().add("combo_box");
@@ -1124,11 +1108,11 @@ public class ReportsController implements Initializable {
         sale_date.setCellValueFactory(new PropertyValueFactory<AnimalSale, String>("sale_date"));
         sale_date.setPrefWidth(180);
 
-        TableColumn<AnimalSale, Float> price = new TableColumn<>("Price");
-        price.setCellValueFactory(new PropertyValueFactory<AnimalSale, Float>("price"));
+        TableColumn<AnimalSale, Float> price = new TableColumn<>(COL_PRICE);
+        price.setCellValueFactory(new PropertyValueFactory<AnimalSale, Float>(COL_PRICE));
         price.setPrefWidth(180);
 
-        TableColumn<AnimalSale, String> client= new TableColumn<>("Client");
+        TableColumn<AnimalSale, String> client= new TableColumn<>(COL_CLIENT);
         client.setCellValueFactory(new PropertyValueFactory<AnimalSale, String>("clientName"));
         client.setPrefWidth(180);
 
@@ -1146,35 +1130,46 @@ public class ReportsController implements Initializable {
     private void exportToExcelAnimalSales() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"), new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.getExtensionFilters().setAll(
+                new FileChooser.ExtensionFilter(LABEL_EXCEL_FILES, EXT_XLSX)
+        );
+
         File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try {
-                Workbook workbook = new XSSFWorkbook();
-                Sheet sheet = workbook.createSheet("Milk Sales");
-                Row header = sheet.createRow(1);
-                header.createCell(1).setCellValue("Animal ID");
-                header.createCell(2).setCellValue("Date");
-                header.createCell(3).setCellValue("Price");
-                header.createCell(4).setCellValue("Client");
+        if (file == null) {
+            return;
+        }
 
+        if (!file.getName().toLowerCase().endsWith(".xlsx")) {
+            file = new File(file.getParent(), file.getName() + ".xlsx");
+        }
 
-                for (AnimalSale animalSale: getDataAnimalSales()) {
-                    Row row = sheet.createRow(sheet.getLastRowNum() + 1);
-                    row.createCell(1).setCellValue(animalSale.getAnimalId());
-                    row.createCell(2).setCellValue(animalSale.getSale_date());
-                    row.createCell(3).setCellValue(animalSale.getPrice());
-                    row.createCell(4).setCellValue(animalSale.getClientName());
-                }
+        try (Workbook workbook = new XSSFWorkbook();
+             FileOutputStream out = new FileOutputStream(file)) {
 
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                workbook.write(fileOutputStream);
-                workbook.close();
+            Sheet sheet = workbook.createSheet("Milk Sales");
 
-                displayAlert("Success", "Report exported successfully", Alert.AlertType.INFORMATION);
-            } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("Animal ID");
+            header.createCell(1).setCellValue("Date");
+            header.createCell(2).setCellValue(COL_PRICE);
+            header.createCell(3).setCellValue(COL_CLIENT);
+
+            for (AnimalSale animalSale : getDataAnimalSales()) {
+                Row row = sheet.createRow(sheet.getLastRowNum() + 1);
+                row.createCell(0).setCellValue(animalSale.getAnimalId());
+                row.createCell(1).setCellValue(String.valueOf(animalSale.getSale_date()));
+                row.createCell(2).setCellValue(animalSale.getPrice());
+                row.createCell(3).setCellValue(animalSale.getClientName());
             }
+
+            workbook.write(out);
+
+            displayAlert(TITLE_SUCCESS, "Report exported successfully", Alert.AlertType.INFORMATION);
+
+        } catch (IOException e) {
+            displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
+        } catch (Exception e) {
+            displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
         }
 
     }
@@ -1206,7 +1201,7 @@ public class ReportsController implements Initializable {
                     document.add(text);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                    displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
                 }
                 PdfPTable table = new PdfPTable(COLUMNS_COUNT_Table_AnimalSales);
 
@@ -1222,21 +1217,14 @@ public class ReportsController implements Initializable {
                 //add table header
                 table.addCell(new PdfPCell(new Paragraph("ID", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
                 table.addCell(new PdfPCell(new Paragraph("Date", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Price", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Client", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-
+                table.addCell(new PdfPCell(new Paragraph(COL_PRICE, FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph(COL_CLIENT, FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
 
                 //add padding to cells
                 table.getDefaultCell().setPadding(3);
                 table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
                 table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
 
-
-
-
-                //get employee of each row
-                //used a method in my updateEmplyeeController to get the employee of each row based on the cin
-                /*  NewPurchaseController controller = new NewPurchaseController();*/
 
                 for (AnimalSale animalSale : getDataAnimalSales()) {
                     /* Purchase pur = controller.getPurchase(purchase.getId());*/
@@ -1251,14 +1239,10 @@ public class ReportsController implements Initializable {
 
                 document.add(table);
                 document.close();
-                displayAlert("Success", "Animals Sales exported successfully", Alert.AlertType.INFORMATION);
+                displayAlert(TITLE_SUCCESS, "Animals Sales exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                displayAlert(TITLE_ERROR, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
     }
-
-    }
-
-
-
+}
