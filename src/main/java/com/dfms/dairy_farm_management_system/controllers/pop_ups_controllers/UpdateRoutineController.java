@@ -25,6 +25,7 @@ import static com.dfms.dairy_farm_management_system.helpers.Helper.displayAlert;
 public class UpdateRoutineController {
     private static final String STYLE_LABEL_BOLD_14 = "-fx-font-size: 14px; -fx-font-weight: bold;";
     private static final String STYLE_INPUT = "input";
+    private static final ObservableList<String> PERIODS = FXCollections.observableArrayList("Morning", "Evening");
 
     @FXML
     TextField routineName;
@@ -123,62 +124,44 @@ public class UpdateRoutineController {
     }
 
     public void addItem(String food) {
-        HBox hBox = new HBox();
-        hBox.setSpacing(60);
-        VBox foodType = new VBox();
-        Label label = new Label("Food type");
-        label.setStyle(STYLE_LABEL_BOLD_14);
-        CheckBox checkBox = new CheckBox(food);
-        checkBox.getStyleClass().add("main_content");
-        VBox.setMargin(checkBox, new Insets(10, 0, 0, 0));
-        foodType.getChildren().add(label);
-        foodType.getChildren().add(checkBox);
-        hBox.getChildren().add(foodType);
-        VBox foodQuantity = new VBox();
-        Label label1 = new Label("Food Quantity");
-        label1.setStyle(STYLE_LABEL_BOLD_14);
-        TextField quantity = new TextField();
-        quantity.setPromptText("Quantity");
-        quantity.getStyleClass().add(STYLE_INPUT);
-        quantity.getStyleClass().add("quantity_input");
-        VBox.setMargin(quantity, new Insets(10, 0, 0, 0));
-        foodQuantity.getChildren().add(label1);
-        foodQuantity.getChildren().add(quantity);
-        hBox.getChildren().add(foodQuantity);
-        VBox feedingTime = new VBox();
-        Label label2 = new Label("Feeding Time");
-        label2.setStyle(STYLE_LABEL_BOLD_14);
-        ObservableList<String> periods = FXCollections.observableArrayList("Morning", "Evening");
-        ComboBox<String> period = new ComboBox<String>(periods);
-        period.setPromptText("Period");
-        period.getStyleClass().add(STYLE_INPUT);
-        period.getStyleClass().add("clock_input");
-        VBox.setMargin(period, new Insets(10, 0, 0, 8));
-        feedingTime.getChildren().add(label2);
-        feedingTime.getChildren().add(period);
-        hBox.getChildren().add(feedingTime);
-        this.foodList.getChildren().add(hBox);
+        this.foodList.getChildren().add(createFoodRow(food, false, null, null));
     }
 
     public void addSelectedItem(String food, RoutineDetails detail) {
+        HBox row = createFoodRow(
+                food,
+                true,
+                detail == null ? null : String.valueOf(detail.getQuantity()),
+                detail == null ? null : detail.getFeeding_time()
+        );
+        this.foodList.getChildren().add(row);
+    }
+
+    private HBox createFoodRow(String food, boolean selected, String quantityText, String feedingTimeValue) {
         HBox hBox = new HBox();
         hBox.setSpacing(60);
+
         VBox foodType = new VBox();
         Label label = new Label("Food type");
         label.setStyle(STYLE_LABEL_BOLD_14);
         CheckBox checkBox = new CheckBox(food);
-        checkBox.setSelected(true);
-        System.out.println(food + " checkbox is selected " + checkBox.isSelected());
+        checkBox.setSelected(selected);
+        if (selected) {
+            System.out.println(food + " checkbox is selected " + checkBox.isSelected());
+        }
         checkBox.getStyleClass().add("main_content");
         VBox.setMargin(checkBox, new Insets(10, 0, 0, 0));
         foodType.getChildren().add(label);
         foodType.getChildren().add(checkBox);
         hBox.getChildren().add(foodType);
+
         VBox foodQuantity = new VBox();
         Label label1 = new Label("Food Quantity");
         label1.setStyle(STYLE_LABEL_BOLD_14);
         TextField quantity = new TextField();
-        quantity.setText(String.valueOf(detail.getQuantity()));
+        if (quantityText != null) {
+            quantity.setText(quantityText);
+        }
         quantity.setPromptText("Quantity");
         quantity.getStyleClass().add(STYLE_INPUT);
         quantity.getStyleClass().add("quantity_input");
@@ -186,12 +169,14 @@ public class UpdateRoutineController {
         foodQuantity.getChildren().add(label1);
         foodQuantity.getChildren().add(quantity);
         hBox.getChildren().add(foodQuantity);
+
         VBox feedingTime = new VBox();
         Label label2 = new Label("Feeding Time");
         label2.setStyle(STYLE_LABEL_BOLD_14);
-        ObservableList<String> periods = FXCollections.observableArrayList("Morning", "Evening");
-        ComboBox<String> period = new ComboBox<String>(periods);
-        period.setValue(detail.getFeeding_time());
+        ComboBox<String> period = new ComboBox<String>(PERIODS);
+        if (feedingTimeValue != null) {
+            period.setValue(feedingTimeValue);
+        }
         period.setPromptText("Period");
         period.getStyleClass().add(STYLE_INPUT);
         period.getStyleClass().add("clock_input");
@@ -199,7 +184,8 @@ public class UpdateRoutineController {
         feedingTime.getChildren().add(label2);
         feedingTime.getChildren().add(period);
         hBox.getChildren().add(feedingTime);
-        this.foodList.getChildren().add(hBox);
+
+        return hBox;
     }
 
     public ArrayList<String> getFoods() {
