@@ -63,8 +63,6 @@ public class SalesController implements Initializable {
                     "-fx-cursor: hand;" +
                     "-fx-size:15px;";
 
-    private static final int COLUMNS_COUNT = 4;
-
     @FXML
     private TableView<MilkSale> MilkSaleTable;
 
@@ -87,21 +85,12 @@ public class SalesController implements Initializable {
     private TableColumn<MilkSale, Float> quantity_c;
 
     @FXML
-    private Button search_btn;
-
-    @FXML
-    private Button refresh_table_btn;
-
-    @FXML
-    private Button refresh_table_btn1;
-
-    @FXML
     private TextField search_inpu;
 
     @FXML
     private ComboBox<String> combo;
 
-    ObservableList<String> list = FXCollections.observableArrayList("PDF", "Excel");
+    private final ObservableList<String> exportTypes = FXCollections.observableArrayList("PDF", "Excel");
 
     @FXML
     private TableColumn<AnimalSale, String> animalis_col;
@@ -124,37 +113,47 @@ public class SalesController implements Initializable {
     @FXML
     private TextField search_input;
 
-    PreparedStatement statement = null;
-    ResultSet resultSet = null;
+    private PreparedStatement statement = null;
+    private ResultSet resultSet = null;
 
-    private Statement statemeent;
-    private Connection connection = getConnection();
+    private final Connection connection = getConnection();
 
     private final Image editImg = new Image(getClass().getResourceAsStream("/images/edit.png"));
     private final Image deleteImg = new Image(getClass().getResourceAsStream("/images/delete.png"));
     private final Image viewImg = new Image(getClass().getResourceAsStream("/images/eye.png"));
 
+    private interface ThrowingRunnable {
+        void run() throws Exception;
+    }
+
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
         BasicConfigurator.configure();
-        combo.setItems(list);
-        combo1.setItems(list);
+
+        combo.setItems(exportTypes);
+        combo1.setItems(exportTypes);
 
         setupExportCombo(combo, this::exportToPDF, this::exportToExcel);
         setupExportCombo(combo1, this::exportToPDF2, this::exportToExcel2);
 
-        liveSearch(search_input, AnimalSalesTable);
+        configureAnimalSalesTable();
+        configureMilkSalesTable();
+
+        wireLiveSearch(search_input, this::refreshTableAnimalSales, this::getAnimalSale,
+                (a, q) -> safeContains(a.getClientName(), q) || safeContains(a.getAnimalId(), q),
+                AnimalSalesTable);
+
+        wireLiveSearch(search_inpu, this::refreshTableMilkSales, this::getMilkSale,
+                (m, q) -> safeContains(m.getClientName(), q),
+                MilkSaleTable);
+
         try {
-            afficher();
-        } catch (SQLException | ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-        try {
-            afficheer();
+            refreshTableAnimalSales();
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-        liveSearch2(search_inpu, MilkSaleTable);
+
+        refreshTableMilkSales();
     }
 
     private void setupExportCombo(ComboBox<String> target, Runnable pdfAction, Runnable excelAction) {
@@ -182,12 +181,11 @@ public class SalesController implements Initializable {
         ObservableList<AnimalSale> list = FXCollections.observableArrayList();
 
         String query = "SELECT * FROM `animals_sales`";
-
         statement = DBConfig.getConnection().prepareStatement(query);
         resultSet = statement.executeQuery();
+
         while (resultSet.next()) {
             AnimalSale animalSale = new AnimalSale();
-
             animalSale.setId(resultSet.getInt("id"));
             animalSale.setClientId(resultSet.getInt("client_id"));
             animalSale.setAnimalId(resultSet.getString("animal_id"));
@@ -195,9 +193,30 @@ public class SalesController implements Initializable {
             animalSale.setSale_date(resultSet.getDate(COLUMN_SALE_DATE));
             animalSale.setCreated_at(resultSet.getTimestamp("created_at"));
             animalSale.setUpdated_at(resultSet.getTimestamp("updated_at"));
-
             list.add(animalSale);
         }
+
+        disconnect();
+        return list;
+    }
+
+    public ObservableList<MilkSale> getMilkSale() throws SQLException {
+        ObservableList<MilkSale> list = FXCollections.observableArrayList();
+
+        String selectQuery = "SELECT * FROM milk_sales";
+        statement = DBConfig.getConnection().prepareStatement(selectQuery);
+        resultSet = statement.executeQuery();
+
+        while (resultSet.next()) {
+            MilkSale milkSale = new MilkSale();
+            milkSale.setId(resultSet.getInt("id"));
+            milkSale.setPrice(resultSet.getFloat(PRICE_LABEL));
+            milkSale.setQuantity(resultSet.getFloat(COLUMN_QUANTITY));
+            milkSale.setClientId(resultSet.getInt("client_id"));
+            milkSale.setSale_date(resultSet.getDate(COLUMN_SALE_DATE));
+            list.add(milkSale);
+        }
+
         disconnect();
         return list;
     }
@@ -205,22 +224,28 @@ public class SalesController implements Initializable {
     public void refreshTableAnimalSales() throws SQLException {
         AnimalSalesTable.getItems().clear();
         try {
-            afficher();
+            AnimalSalesTable.setItems(getAnimalSale());
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private void afficher() throws SQLException, ClassNotFoundException {
-        ObservableList<AnimalSale> list = getAnimalSale();
+    private void refreshTableMilkSales() {
+        MilkSaleTable.getItems().clear();
+        try {
+            MilkSaleTable.setItems(getMilkSale());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
+    private void configureAnimalSalesTable() {
         animalis_col.setCellValueFactory(new PropertyValueFactory<>("animalId"));
         price_col.setCellValueFactory(new PropertyValueFactory<>(PRICE_LABEL));
         client_col.setCellValueFactory(new PropertyValueFactory<>("clientName"));
         operationdate_col.setCellValueFactory(new PropertyValueFactory<>(COLUMN_SALE_DATE));
 
         action_col.setCellFactory(col -> new TableCell<AnimalSale, String>() {
-
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
@@ -235,8 +260,7 @@ public class SalesController implements Initializable {
                 ImageView ivEdit = createIcon(editImg);
                 ImageView ivDelete = createIcon(deleteImg);
 
-                HBox managebtn = createManageButtons(ivView, ivEdit, ivDelete);
-                setGraphic(managebtn);
+                setGraphic(createManageButtons(ivView, ivEdit, ivDelete));
                 setText(null);
 
                 ivDelete.setOnMouseClicked(event -> {
@@ -298,8 +322,95 @@ public class SalesController implements Initializable {
                 });
             }
         });
+    }
 
-        AnimalSalesTable.setItems(list);
+    private void configureMilkSalesTable() {
+        quantity_c.setCellValueFactory(new PropertyValueFactory<>(COLUMN_QUANTITY));
+        price_c.setCellValueFactory(new PropertyValueFactory<>(PRICE_LABEL));
+        client_c.setCellValueFactory(new PropertyValueFactory<>("clientName"));
+        date_c.setCellValueFactory(new PropertyValueFactory<>(COLUMN_SALE_DATE));
+
+        Callback<TableColumn<MilkSale, String>, TableCell<MilkSale, String>> cellFactory =
+                (TableColumn<MilkSale, String> param) -> new TableCell<MilkSale, String>() {
+
+                    @Override
+                    public void updateItem(String item, boolean empty) {
+                        super.updateItem(item, empty);
+
+                        if (empty) {
+                            setGraphic(null);
+                            setText(null);
+                            return;
+                        }
+
+                        ImageView ivView = createIcon(viewImg);
+                        ImageView ivEdit = createIcon(editImg);
+                        ImageView ivDelete = createIcon(deleteImg);
+
+                        setGraphic(createManageButtons(ivView, ivEdit, ivDelete));
+                        setText(null);
+
+                        ivDelete.setOnMouseClicked(event -> {
+                            MilkSale selected = MilkSaleTable.getSelectionModel().getSelectedItem();
+                            if (selected == null) return;
+
+                            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                            alert.setTitle("Delete Confirmation");
+                            alert.setHeaderText("Are you sure you want to delete this cow sale?");
+
+                            Optional<ButtonType> result = alert.showAndWait();
+                            if (result.isEmpty() || result.get() != ButtonType.OK) return;
+
+                            try {
+                                if (selected.delete()) {
+                                    displayAlert(SUCCESS_TITLE, "Milk Sale deleted successfully", Alert.AlertType.INFORMATION);
+                                    refreshTableMilkSales();
+                                    return;
+                                }
+                                displayAlert(ERROR_TITLE, "Error while deleting!!!", Alert.AlertType.ERROR);
+                            } catch (Exception e) {
+                                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+                            }
+                        });
+
+                        ivEdit.setOnMouseClicked(event -> {
+                            MilkSale milkSale = MilkSaleTable.getSelectionModel().getSelectedItem();
+                            if (milkSale == null) return;
+
+                            openPopup(
+                                    "/com/dfms/dairy_farm_management_system/popups/add_new_milk_sale.fxml",
+                                    "Update Milk Sale",
+                                    controller -> {
+                                        MilkSalesController milkSalesController = (MilkSalesController) controller;
+                                        milkSalesController.setUpdate(true);
+                                        milkSalesController.fetchMilkSale(milkSale);
+                                    }
+                            );
+                        });
+
+                        ivView.setOnMouseClicked(event -> {
+                            MilkSale milkSale = MilkSaleTable.getSelectionModel().getSelectedItem();
+                            if (milkSale == null) return;
+
+                            openPopup(
+                                    "/com/dfms/dairy_farm_management_system/popups/milk_sale_details.fxml",
+                                    "Animal Sale Details",
+                                    controller -> {
+                                        MilkSaleDetailsController c = (MilkSaleDetailsController) controller;
+                                        c.fetchMilkSale(
+                                                milkSale.getId(),
+                                                milkSale.getQuantity(),
+                                                milkSale.getPrice(),
+                                                milkSale.getClientName(),
+                                                milkSale.getSale_date()
+                                        );
+                                    }
+                            );
+                        });
+                    }
+                };
+
+        action_c.setCellFactory(cellFactory);
     }
 
     private ImageView createIcon(Image image) {
@@ -342,157 +453,167 @@ public class SalesController implements Initializable {
         }
     }
 
-    public void liveSearch(TextField search_input, TableView table) {
-        search_input.textProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue == null || newValue.isEmpty()) {
+    private interface ListSupplier<T> {
+        ObservableList<T> get() throws Exception;
+    }
+
+    private interface MatchPredicate<T> {
+        boolean match(T item, String query);
+    }
+
+    private <T> void wireLiveSearch(
+            TextField field,
+            ThrowingRunnable refreshAction,
+            ListSupplier<T> supplier,
+            MatchPredicate<T> matcher,
+            TableView<T> table
+    ) {
+        field.textProperty().addListener((observable, oldValue, newValue) -> {
+            String q = newValue == null ? "" : newValue.trim();
+            if (q.isEmpty()) {
                 try {
-                    refreshTableAnimalSales();
-                } catch (SQLException e) {
+                    refreshAction.run();
+                } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
-            } else {
-                ObservableList<AnimalSale> filteredList = FXCollections.observableArrayList();
-                ObservableList<AnimalSale> animalSale = null;
-                try {
-                    animalSale = getAnimalSale();
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                } catch (ClassNotFoundException e) {
-                    throw new RuntimeException(e);
-                }
-                for (AnimalSale Animal : animalSale) {
-                    if (Animal.getClientName().toLowerCase().contains(newValue.toLowerCase()) || Animal.getAnimalId().toLowerCase().contains(newValue.toLowerCase())) {
-                        filteredList.add(Animal);
+                return;
+            }
+            ObservableList<T> filtered = FXCollections.observableArrayList();
+            try {
+                for (T item : supplier.get()) {
+                    if (matcher.match(item, q)) {
+                        filtered.add(item);
                     }
                 }
-                AnimalSalesTable.setItems(filteredList);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
+
+            table.setItems(filtered);
         });
     }
 
-    public ObservableList<MilkSale> getMilkSale() throws SQLException {
-        ObservableList<MilkSale> list = FXCollections.observableArrayList();
-
-        String select_query = "SELECT * FROM milk_sales";
-
-        statement = DBConfig.getConnection().prepareStatement(select_query);
-        resultSet = statement.executeQuery();
-        while (resultSet.next()) {
-            MilkSale milkSale = new MilkSale();
-
-            milkSale.setId(resultSet.getInt("id"));
-            milkSale.setPrice(resultSet.getFloat(PRICE_LABEL));
-            milkSale.setQuantity(resultSet.getFloat(COLUMN_QUANTITY));
-            milkSale.setClientId(resultSet.getInt("client_id"));
-            milkSale.setSale_date(resultSet.getDate(COLUMN_SALE_DATE));
-
-            list.add(milkSale);
-        }
-        disconnect();
-        return list;
+    private boolean safeContains(String text, String query) {
+        return safeLower(text).contains(safeLower(query));
     }
 
-    private void afficheer() throws SQLException {
-        ObservableList<MilkSale> list = getMilkSale();
-        quantity_c.setCellValueFactory(new PropertyValueFactory<MilkSale, Float>(COLUMN_QUANTITY));
-        price_c.setCellValueFactory(new PropertyValueFactory<MilkSale, Float>(PRICE_LABEL));
-        client_c.setCellValueFactory(new PropertyValueFactory<MilkSale, String>("clientName"));
-        date_c.setCellValueFactory(new PropertyValueFactory<MilkSale, LocalDate>(COLUMN_SALE_DATE));
-
-        Callback<TableColumn<MilkSale, String>, TableCell<MilkSale, String>> cellFoctory = (TableColumn<MilkSale, String> param) -> {
-            final TableCell<MilkSale, String> cell = new TableCell<MilkSale, String>() {
-
-                @Override
-                public void updateItem(String item, boolean empty) {
-                    super.updateItem(item, empty);
-                    if (empty) {
-                        setGraphic(null);
-                        setText(null);
-                    } else {
-                        ImageView ivView = createIcon(viewImg);
-                        ImageView ivEdit = createIcon(editImg);
-                        ImageView ivDelete = createIcon(deleteImg);
-
-                        HBox managebtn = createManageButtons(ivView, ivEdit, ivDelete);
-                        setGraphic(managebtn);
-
-                        ivDelete.setOnMouseClicked((MouseEvent event) -> {
-                            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                            alert.setTitle("Delete Confirmation");
-                            alert.setHeaderText("Are you sure you want to delete this cow sale?");
-
-                            MilkSale mc = MilkSaleTable.getSelectionModel().getSelectedItem();
-                            Optional<ButtonType> result = alert.showAndWait();
-                            if (result.get() == ButtonType.OK) {
-                                try {
-                                    if (mc.delete()) {
-                                        displayAlert(SUCCESS_TITLE, "Milk Sale deleted successfully", Alert.AlertType.INFORMATION);
-                                        refreshTableMilkSales();
-                                    } else {
-                                        displayAlert(ERROR_TITLE, "Error while deleting!!!", Alert.AlertType.ERROR);
-                                    }
-                                } catch (Exception e) {
-                                    displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-                                }
-                            }
-                        });
-
-                        ivEdit.setOnMouseClicked((MouseEvent event) -> {
-                            MilkSale milkSale = MilkSaleTable.getSelectionModel().getSelectedItem();
-                            openPopup(
-                                    "/com/dfms/dairy_farm_management_system/popups/add_new_milk_sale.fxml",
-                                    "Update Milk Sale",
-                                    controller -> {
-                                        MilkSalesController milkSalesController = (MilkSalesController) controller;
-                                        milkSalesController.setUpdate(true);
-                                        milkSalesController.fetchMilkSale(milkSale);
-                                    }
-                            );
-                        });
-
-                        ivView.setOnMouseClicked((MouseEvent event) -> {
-                            MilkSale milkSale = MilkSaleTable.getSelectionModel().getSelectedItem();
-                            openPopup(
-                                    "/com/dfms/dairy_farm_management_system/popups/milk_sale_details.fxml",
-                                    "Animal Sale Details",
-                                    controller -> {
-                                        MilkSaleDetailsController c = (MilkSaleDetailsController) controller;
-                                        c.fetchMilkSale(milkSale.getId(), milkSale.getQuantity(), milkSale.getPrice(), milkSale.getClientName(), milkSale.getSale_date());
-                                    }
-                            );
-                        });
-                    }
-                }
-            };
-            return cell;
-        };
-
-        action_c.setCellFactory(cellFoctory);
-        MilkSaleTable.setItems(list);
+    private String safeLower(String s) {
+        return s == null ? "" : s.toLowerCase();
     }
 
-    private void refreshTableMilkSales() {
-        MilkSaleTable.getItems().clear();
-        try {
-            afficheer();
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    void exportToExcel() {
+    private File chooseSaveFile(String title, FileChooser.ExtensionFilter... filters) {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle(SAVE_AS_TITLE);
-        fileChooser.getExtensionFilters().addAll(
+        fileChooser.setTitle(title);
+        fileChooser.getExtensionFilters().addAll(filters);
+        return fileChooser.showSaveDialog(null);
+    }
+
+    private void exportExcelCommon(String sheetName, String query, String[] headers, BiConsumer<Row, ResultSet> writeRow) {
+        File file = chooseSaveFile(
+                SAVE_AS_TITLE,
                 new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"),
                 new FileChooser.ExtensionFilter("CSV Files", "*.csv")
         );
 
-        File file = fileChooser.showSaveDialog(null);
-        if (file == null) {
-            return;
-        }
+        if (file == null) return;
 
+        try (
+                Workbook workbook = new XSSFWorkbook();
+                FileOutputStream out = new FileOutputStream(file);
+                Statement st = connection.createStatement();
+                ResultSet rs = st.executeQuery(query)
+        ) {
+            Sheet sheet = workbook.createSheet(sheetName);
+
+            Row header = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+
+            int rowNum = 1;
+            while (rs.next()) {
+                Row row = sheet.createRow(rowNum++);
+                writeRow.accept(row, rs);
+            }
+
+            workbook.write(out);
+            displayAlert(SUCCESS_TITLE, sheetName + " exported successfully", Alert.AlertType.INFORMATION);
+        } catch (Exception e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+    private void exportPdfCommon(String titleText, String descText, String[] headers, Consumer<PdfPTable> fillRows) {
+        File file = chooseSaveFile(SAVE_AS_TITLE, new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
+        if (file == null) return;
+
+        try {
+            Document document = new Document();
+            document.setPageSize(PageSize.A4.rotate());
+            PdfWriter.getInstance(document, new FileOutputStream(file));
+            document.open();
+
+            Paragraph title = new Paragraph(
+                    titleText,
+                    FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK)
+            );
+            Paragraph text = new Paragraph(
+                    descText,
+                    FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK)
+            );
+
+            title.setAlignment(Element.ALIGN_CENTER);
+            text.setAlignment(Element.ALIGN_CENTER);
+            title.setSpacingAfter(30);
+            text.setSpacingAfter(30);
+
+            document.add(title);
+            document.add(text);
+
+            PdfPTable table = new PdfPTable(headers.length);
+            table.setWidthPercentage(100);
+            table.setSpacingBefore(11f);
+            table.setSpacingAfter(11f);
+
+            float[] widths = new float[headers.length];
+            for (int i = 0; i < headers.length; i++) widths[i] = 2f;
+            table.setWidths(widths);
+
+            for (String h : headers) {
+                addPdfHeaderCell(table, h);
+            }
+
+            table.getDefaultCell().setPadding(3);
+            table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
+            table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
+
+            fillRows.accept(table);
+
+            document.add(table);
+            document.close();
+
+            displayAlert(SUCCESS_TITLE, titleText + " exported successfully", Alert.AlertType.INFORMATION);
+        } catch (Exception e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+    private void addPdfHeaderCell(PdfPTable table, String text) {
+        PdfPCell cell = new PdfPCell(new Paragraph(
+                text,
+                FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
+        ));
+        cell.setPadding(5);
+        table.addCell(cell);
+    }
+
+    private void addPdfCell(PdfPTable table, String text) {
+        PdfPCell cell = new PdfPCell(new Paragraph(text));
+        cell.setPadding(5);
+        table.addCell(cell);
+    }
+
+    void exportToExcel() {
         String query =
                 "SELECT ms.id AS sale_id, " +
                         "       ms.animal_id AS animal_id, " +
@@ -502,232 +623,22 @@ public class SalesController implements Initializable {
                         "FROM animals_sales ms " +
                         "JOIN clients c ON ms.client_id = c.id";
 
-        try (
-                Workbook workbook = new XSSFWorkbook();
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                Statement statement = connection.createStatement();
-                ResultSet rs = statement.executeQuery(query)
-        ) {
-            Sheet sheet = workbook.createSheet("Animal Sales");
+        String[] headers = {"Sale ID", "Animal ID", PRICE_LABEL, CLIENT_LABEL, "Date"};
 
-            Row header = sheet.createRow(0);
-            header.createCell(0).setCellValue("Sale ID");
-            header.createCell(1).setCellValue("Animal ID");
-            header.createCell(2).setCellValue(PRICE_LABEL);
-            header.createCell(3).setCellValue(CLIENT_LABEL);
-            header.createCell(4).setCellValue("Date");
-
-            int rowNum = 1;
-            while (rs.next()) {
-                Row row = sheet.createRow(rowNum++);
+        exportExcelCommon("Animal Sales", query, headers, (row, rs) -> {
+            try {
                 row.createCell(0).setCellValue(rs.getString("sale_id"));
                 row.createCell(1).setCellValue(rs.getString("animal_id"));
                 row.createCell(2).setCellValue(rs.getString(PRICE_LABEL));
                 row.createCell(3).setCellValue(rs.getString("client_name"));
                 row.createCell(4).setCellValue(rs.getString(COLUMN_SALE_DATE));
-            }
-
-            workbook.write(fileOutputStream);
-            displayAlert(SUCCESS_TITLE, "Animal Sales exported successfully", Alert.AlertType.INFORMATION);
-
-        } catch (Exception e) {
-            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-        }
-    }
-
-    void exportToPDF() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle(SAVE_AS_TITLE);
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
-        File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try {
-                Document document = new Document();
-                document.setPageSize(PageSize.A4.rotate());
-
-                PdfWriter.getInstance(document, new FileOutputStream(file));
-                document.open();
-
-                Paragraph title = new Paragraph(
-                        "Animal Sales List",
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK)
-                );
-                Paragraph text = new Paragraph(
-                        "This is the list of the animal sales",
-                        FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK)
-                );
-
-                title.setAlignment(Element.ALIGN_CENTER);
-                text.setAlignment(Element.ALIGN_CENTER);
-                title.setSpacingAfter(30);
-                text.setSpacingAfter(30);
-
-                document.add(title);
-                document.add(text);
-
-                PdfPTable table = new PdfPTable(COLUMNS_COUNT);
-                table.setWidthPercentage(100);
-                table.setSpacingBefore(11f);
-                table.setSpacingAfter(11f);
-
-                float[] colWidth = new float[COLUMNS_COUNT];
-                for (int i = 0; i < COLUMNS_COUNT; i++) {
-                    colWidth[i] = 2f;
-                }
-                table.setWidths(colWidth);
-
-                addPdfHeaderCell(table, "Animal ID");
-                addPdfHeaderCell(table, PRICE_LABEL);
-                addPdfHeaderCell(table, CLIENT_LABEL);
-                addPdfHeaderCell(table, "Sale's date");
-
-                table.getDefaultCell().setPadding(3);
-                table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
-
-                ObservableList<AnimalSale> animalSales = AnimalSalesTable.getItems();
-                CowSalesController controller = new CowSalesController();
-
-                for (AnimalSale animalSale : animalSales) {
-                    AnimalSale sale = controller.getSale(animalSale.getId());
-
-                    addPdfCell(table, String.valueOf(sale.getAnimalId()));
-                    addPdfCell(table, String.valueOf(sale.getPrice()));
-                    addPdfCell(table, sale.getClientName());
-                    addPdfCell(table, String.valueOf(sale.getSale_date()));
-                }
-
-                document.add(table);
-                document.close();
-
-                displayAlert(SUCCESS_TITLE, "Animal Sales exported successfully", Alert.AlertType.INFORMATION);
-            } catch (Exception e) {
-                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-            }
-        }
-    }
-
-    private void addPdfHeaderCell(PdfPTable table, String text) {
-        table.addCell(new PdfPCell(new Paragraph(
-                text,
-                FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)
-        ))).setPadding(5);
-    }
-
-    private void addPdfCell(PdfPTable table, String text) {
-        table.addCell(new PdfPCell(new Paragraph(text))).setPadding(5);
-    }
-
-    public void liveSearch2(TextField search_input, TableView table) {
-        search_inpu.textProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue == null || newValue.isEmpty()) {
-                refreshTableMilkSales();
-            } else {
-                ObservableList<MilkSale> filteredList = FXCollections.observableArrayList();
-                ObservableList<MilkSale> milkSale = null;
-                try {
-                    milkSale = getMilkSale();
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-                for (MilkSale milk : milkSale) {
-                    if (milk.getClientName().toLowerCase().contains(newValue.toLowerCase())) {
-                        filteredList.add(milk);
-                    }
-                }
-                MilkSaleTable.setItems(filteredList);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
             }
         });
     }
 
-    void exportToPDF2() {
-
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle(SAVE_AS_TITLE);
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
-        File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try {
-                Document document = new Document();
-                document.setPageSize(PageSize.A4.rotate());
-
-                PdfWriter.getInstance(document, new FileOutputStream(file));
-                document.open();
-
-                Paragraph title = new Paragraph(
-                        "Milk Sales List",
-                        FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK)
-                );
-                Paragraph text = new Paragraph(
-                        "This is the list of the milk sales",
-                        FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK)
-                );
-
-                title.setAlignment(Element.ALIGN_CENTER);
-                text.setAlignment(Element.ALIGN_CENTER);
-                title.setSpacingAfter(30);
-                text.setSpacingAfter(30);
-
-                document.add(title);
-                document.add(text);
-
-                PdfPTable table = new PdfPTable(COLUMNS_COUNT);
-
-                table.setWidthPercentage(100);
-                table.setSpacingBefore(11f);
-                table.setSpacingAfter(11f);
-
-                float[] colWidth = new float[COLUMNS_COUNT];
-                for (int i = 0; i < COLUMNS_COUNT; i++) {
-                    colWidth[i] = 2f;
-                }
-                table.setWidths(colWidth);
-
-                addPdfHeaderCell(table, COLUMN_QUANTITY);
-                addPdfHeaderCell(table, PRICE_LABEL);
-                addPdfHeaderCell(table, CLIENT_LABEL);
-                addPdfHeaderCell(table, "Sale's date");
-
-                table.getDefaultCell().setPadding(3);
-                table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
-
-                ObservableList<MilkSale> milkSales = MilkSaleTable.getItems();
-                MilkSalesController controller = new MilkSalesController();
-
-                for (MilkSale milkSale : milkSales) {
-                    MilkSale milksa = controller.getSale(milkSale.getId());
-
-                    addPdfCell(table, String.valueOf(milksa.getQuantity()));
-                    addPdfCell(table, String.valueOf(milksa.getPrice()));
-                    addPdfCell(table, milksa.getClientName());
-                    addPdfCell(table, String.valueOf(milksa.getSale_date()));
-                }
-
-                document.add(table);
-                document.close();
-
-                displayAlert(SUCCESS_TITLE, "Milk Sales exported successfully", Alert.AlertType.INFORMATION);
-            } catch (Exception e) {
-                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-            }
-
-        }
-    }
-
     void exportToExcel2() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle(SAVE_AS_TITLE);
-        fileChooser.getExtensionFilters().addAll(
-                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"),
-                new FileChooser.ExtensionFilter("CSV Files", "*.csv")
-        );
-
-        File file = fileChooser.showSaveDialog(null);
-        if (file == null) {
-            return;
-        }
-
         String query =
                 "SELECT ms.id AS sale_id, " +
                         "       ms.quantity AS quantity, " +
@@ -737,38 +648,63 @@ public class SalesController implements Initializable {
                         "FROM milk_sales ms " +
                         "JOIN clients c ON ms.client_id = c.id";
 
-        try (
-                Workbook workbook = new XSSFWorkbook();
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                Statement statement = connection.createStatement();
-                ResultSet rs = statement.executeQuery(query)
-        ) {
+        String[] headers = {"Sale ID", COLUMN_QUANTITY, PRICE_LABEL, CLIENT_LABEL, "Date"};
 
-            Sheet sheet = workbook.createSheet("Milk Sales");
-
-            Row header = sheet.createRow(0);
-            header.createCell(0).setCellValue("Sale ID");
-            header.createCell(1).setCellValue(COLUMN_QUANTITY);
-            header.createCell(2).setCellValue(PRICE_LABEL);
-            header.createCell(3).setCellValue(CLIENT_LABEL);
-            header.createCell(4).setCellValue("Date");
-
-            int rowNum = 1;
-            while (rs.next()) {
-                Row row = sheet.createRow(rowNum++);
+        exportExcelCommon("Milk Sales", query, headers, (row, rs) -> {
+            try {
                 row.createCell(0).setCellValue(rs.getString("sale_id"));
                 row.createCell(1).setCellValue(rs.getString(COLUMN_QUANTITY));
                 row.createCell(2).setCellValue(rs.getString(PRICE_LABEL));
                 row.createCell(3).setCellValue(rs.getString("client_name"));
                 row.createCell(4).setCellValue(rs.getString(COLUMN_SALE_DATE));
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
             }
+        });
+    }
 
-            workbook.write(fileOutputStream);
-            displayAlert(SUCCESS_TITLE, "Milk Sales exported successfully", Alert.AlertType.INFORMATION);
+    void exportToPDF() {
+        String[] headers = {"Animal ID", PRICE_LABEL, CLIENT_LABEL, "Sale's date"};
 
-        } catch (Exception e) {
-            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-        }
+        exportPdfCommon(
+                "Animal Sales List",
+                "This is the list of the animal sales",
+                headers,
+                table -> {
+                    ObservableList<AnimalSale> animalSales = AnimalSalesTable.getItems();
+                    CowSalesController controller = new CowSalesController();
+
+                    for (AnimalSale animalSale : animalSales) {
+                        AnimalSale sale = controller.getSale(animalSale.getId());
+                        addPdfCell(table, String.valueOf(sale.getAnimalId()));
+                        addPdfCell(table, String.valueOf(sale.getPrice()));
+                        addPdfCell(table, sale.getClientName());
+                        addPdfCell(table, String.valueOf(sale.getSale_date()));
+                    }
+                }
+        );
+    }
+
+    void exportToPDF2() {
+        String[] headers = {COLUMN_QUANTITY, PRICE_LABEL, CLIENT_LABEL, "Sale's date"};
+
+        exportPdfCommon(
+                "Milk Sales List",
+                "This is the list of the milk sales",
+                headers,
+                table -> {
+                    ObservableList<MilkSale> milkSales = MilkSaleTable.getItems();
+                    MilkSalesController controller = new MilkSalesController();
+
+                    for (MilkSale milkSale : milkSales) {
+                        MilkSale sale = controller.getSale(milkSale.getId());
+                        addPdfCell(table, String.valueOf(sale.getQuantity()));
+                        addPdfCell(table, String.valueOf(sale.getPrice()));
+                        addPdfCell(table, sale.getClientName());
+                        addPdfCell(table, String.valueOf(sale.getSale_date()));
+                    }
+                }
+        );
     }
 
     @FXML
