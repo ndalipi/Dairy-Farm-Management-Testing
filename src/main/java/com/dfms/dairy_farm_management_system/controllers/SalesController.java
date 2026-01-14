@@ -339,7 +339,6 @@ public class SalesController implements Initializable {
             stage.show();
         } catch (IOException e) {
             displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-            e.printStackTrace();
         }
     }
 
@@ -604,7 +603,6 @@ public class SalesController implements Initializable {
                 displayAlert(SUCCESS_TITLE, "Animal Sales exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
                 displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-                e.printStackTrace();
             }
         }
     }
@@ -712,7 +710,6 @@ public class SalesController implements Initializable {
                 displayAlert(SUCCESS_TITLE, "Milk Sales exported successfully", Alert.AlertType.INFORMATION);
             } catch (Exception e) {
                 displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-                e.printStackTrace();
             }
 
         }
