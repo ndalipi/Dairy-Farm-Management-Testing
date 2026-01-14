@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.net.URL;
 import java.sql.*;
 import java.util.ArrayList;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.stream.Collectors;
@@ -35,6 +34,11 @@ import static com.dfms.dairy_farm_management_system.helpers.Helper.centerScreen;
 import static com.dfms.dairy_farm_management_system.helpers.Helper.displayAlert;
 
 public class MainLayoutController implements Initializable {
+    private static final String FX_BACKGROUND_INSETS =
+            "-fx-background-insets: 0, 0 0 0 4;";
+
+    private static final String NAV_LINK_STYLE_CLASS = "nav_link";
+
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
         initNavButtons();
@@ -42,17 +46,13 @@ public class MainLayoutController implements Initializable {
         String first_view = "dashboard";
         loadView(first_view);
         dashboard_btn.setStyle("-fx-background-color: #FFC700, #00A300;" +
-                "-fx-background-insets: 0, 0 0 0 4;");
+                FX_BACKGROUND_INSETS);
 
         nav_scroll_pane.getStyleClass().clear();
 
         // load user details
         getCurrentUser();
     }
-
-    private PreparedStatement pst;
-
-    private Connection con = DBConfig.getConnection();
 
     private User user;
 
@@ -101,11 +101,11 @@ public class MainLayoutController implements Initializable {
         dashboard_btn = new Button("Dashboard");
         Image dashboard_img = new Image(getClass().getResourceAsStream("/icons/dashboard.png"));
         ImageView imageView = new ImageView(dashboard_img);
-        imageView.getStyleClass().add("nav_link");
+        imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         imageView.setFitWidth(32);
         imageView.setFitHeight(28);
         dashboard_btn.setGraphic(imageView);
-        dashboard_btn.getStyleClass().add("nav_link");
+        dashboard_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         dashboard_btn.setPrefWidth(225);
         dashboard_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         dashboard_btn.setPrefHeight(40);
@@ -120,11 +120,11 @@ public class MainLayoutController implements Initializable {
         profile_btn = new Button("Profile");
         Image profile_img = new Image(getClass().getResourceAsStream("/icons/profile.png"));
         ImageView profile_imageView = new ImageView(profile_img);
-        profile_imageView.getStyleClass().add("nav_link");
+        profile_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         profile_imageView.setFitWidth(32);
         profile_imageView.setFitHeight(28);
         profile_btn.setGraphic(profile_imageView);
-        profile_btn.getStyleClass().add("nav_link");
+        profile_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         profile_btn.setPrefWidth(225);
         profile_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         profile_btn.setPrefHeight(40);
@@ -139,11 +139,11 @@ public class MainLayoutController implements Initializable {
         employees_btn = new Button("Employees");
         Image employees_img = new Image(getClass().getResourceAsStream("/icons/employees.png"));
         ImageView employees_imageView = new ImageView(employees_img);
-        employees_imageView.getStyleClass().add("nav_link");
+        employees_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         employees_imageView.setFitWidth(32);
         employees_imageView.setFitHeight(28);
         employees_btn.setGraphic(employees_imageView);
-        employees_btn.getStyleClass().add("nav_link");
+        employees_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         employees_btn.setPrefWidth(225);
         employees_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         employees_btn.setPrefHeight(40);
@@ -158,11 +158,11 @@ public class MainLayoutController implements Initializable {
         animal_monitor_btn = new Button("Animal Monitor");
         Image animal_monitor_img = new Image(getClass().getResourceAsStream("/icons/monitor.png"));
         ImageView animal_monitor_imageView = new ImageView(animal_monitor_img);
-        animal_monitor_imageView.getStyleClass().add("nav_link");
+        animal_monitor_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         animal_monitor_imageView.setFitWidth(32);
         animal_monitor_imageView.setFitHeight(28);
         animal_monitor_btn.setGraphic(animal_monitor_imageView);
-        animal_monitor_btn.getStyleClass().add("nav_link");
+        animal_monitor_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         animal_monitor_btn.setPrefWidth(225);
         animal_monitor_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         animal_monitor_btn.setPrefHeight(40);
@@ -177,11 +177,11 @@ public class MainLayoutController implements Initializable {
         manage_clients_suppliers_btn = new Button("Manage Clients & Suppliers");
         Image manage_clients_suppliers_img = new Image(getClass().getResourceAsStream("/icons/supplier.png"));
         ImageView manage_clients_suppliers_imageView = new ImageView(manage_clients_suppliers_img);
-        manage_clients_suppliers_imageView.getStyleClass().add("nav_link");
+        manage_clients_suppliers_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         manage_clients_suppliers_imageView.setFitWidth(32);
         manage_clients_suppliers_imageView.setFitHeight(28);
         manage_clients_suppliers_btn.setGraphic(manage_clients_suppliers_imageView);
-        manage_clients_suppliers_btn.getStyleClass().add("nav_link");
+        manage_clients_suppliers_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         manage_clients_suppliers_btn.setPrefWidth(225);
         manage_clients_suppliers_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         manage_clients_suppliers_btn.setPrefHeight(40);
@@ -196,11 +196,11 @@ public class MainLayoutController implements Initializable {
         manage_animal_btn = new Button("Manage Animals");
         Image manage_animal_img = new Image(getClass().getResourceAsStream("/icons/animal.png"));
         ImageView manage_animal_imageView = new ImageView(manage_animal_img);
-        manage_animal_imageView.getStyleClass().add("nav_link");
+        manage_animal_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         manage_animal_imageView.setFitWidth(32);
         manage_animal_imageView.setFitHeight(28);
         manage_animal_btn.setGraphic(manage_animal_imageView);
-        manage_animal_btn.getStyleClass().add("nav_link");
+        manage_animal_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         manage_animal_btn.setPrefWidth(225);
         manage_animal_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         manage_animal_btn.setPrefHeight(40);
@@ -215,11 +215,11 @@ public class MainLayoutController implements Initializable {
         sales_btn = new Button("Sales");
         Image sales_img = new Image(getClass().getResourceAsStream("/icons/sales.png"));
         ImageView sales_imageView = new ImageView(sales_img);
-        sales_imageView.getStyleClass().add("nav_link");
+        sales_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         sales_imageView.setFitWidth(32);
         sales_imageView.setFitHeight(28);
         sales_btn.setGraphic(sales_imageView);
-        sales_btn.getStyleClass().add("nav_link");
+        sales_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         sales_btn.setPrefWidth(225);
         sales_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         sales_btn.setPrefHeight(40);
@@ -234,11 +234,11 @@ public class MainLayoutController implements Initializable {
         purchase_btn = new Button("Purchase");
         Image purchase_img = new Image(getClass().getResourceAsStream("/icons/purchase.png"));
         ImageView purchase_imageView = new ImageView(purchase_img);
-        purchase_imageView.getStyleClass().add("nav_link");
+        purchase_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         purchase_imageView.setFitWidth(32);
         purchase_imageView.setFitHeight(28);
         purchase_btn.setGraphic(purchase_imageView);
-        purchase_btn.getStyleClass().add("nav_link");
+        purchase_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         purchase_btn.setPrefWidth(225);
         purchase_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         purchase_btn.setPrefHeight(40);
@@ -253,11 +253,11 @@ public class MainLayoutController implements Initializable {
         MilkClollection_btn = new Button("Milk Collection");
         Image MilkClollection_img = new Image(getClass().getResourceAsStream("/icons/milk.png"));
         ImageView MilkClollection_imageView = new ImageView(MilkClollection_img);
-        MilkClollection_imageView.getStyleClass().add("nav_link");
+        MilkClollection_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         MilkClollection_imageView.setFitWidth(32);
         MilkClollection_imageView.setFitHeight(28);
         MilkClollection_btn.setGraphic(MilkClollection_imageView);
-        MilkClollection_btn.getStyleClass().add("nav_link");
+        MilkClollection_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         MilkClollection_btn.setPrefWidth(225);
         MilkClollection_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         MilkClollection_btn.setPrefHeight(40);
@@ -272,11 +272,11 @@ public class MainLayoutController implements Initializable {
         manageUsersBtn = new Button("Manage Users");
         Image manageUsersImg = new Image(getClass().getResourceAsStream("/icons/profile.png"));
         ImageView manageUsersImageView = new ImageView(manageUsersImg);
-        manageUsersImageView.getStyleClass().add("nav_link");
+        manageUsersImageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         manageUsersImageView.setFitWidth(32);
         manageUsersImageView.setFitHeight(28);
         manageUsersBtn.setGraphic(manageUsersImageView);
-        manageUsersBtn.getStyleClass().add("nav_link");
+        manageUsersBtn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         manageUsersBtn.setPrefWidth(225);
         manageUsersBtn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         manageUsersBtn.setPrefHeight(40);
@@ -291,11 +291,11 @@ public class MainLayoutController implements Initializable {
         stock_btn = new Button("Stock");
         Image stock_img = new Image(getClass().getResourceAsStream("/icons/stock.png"));
         ImageView stock_imageView = new ImageView(stock_img);
-        stock_imageView.getStyleClass().add("nav_link");
+        stock_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         stock_imageView.setFitWidth(32);
         stock_imageView.setFitHeight(28);
         stock_btn.setGraphic(stock_imageView);
-        stock_btn.getStyleClass().add("nav_link");
+        stock_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         stock_btn.setPrefWidth(225);
         stock_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         stock_btn.setPrefHeight(40);
@@ -310,11 +310,11 @@ public class MainLayoutController implements Initializable {
         reports_btn = new Button("Reports");
         Image reports_img = new Image(getClass().getResourceAsStream("/icons/reports.png"));
         ImageView reports_imageView = new ImageView(reports_img);
-        reports_imageView.getStyleClass().add("nav_link");
+        reports_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         reports_imageView.setFitWidth(32);
         reports_imageView.setFitHeight(28);
         reports_btn.setGraphic(reports_imageView);
-        reports_btn.getStyleClass().add("nav_link");
+        reports_btn.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         reports_btn.setPrefWidth(225);
         reports_btn.setMaxWidth(Region.USE_COMPUTED_SIZE);
         reports_btn.setPrefHeight(40);
@@ -329,11 +329,11 @@ public class MainLayoutController implements Initializable {
         logout = new Button("Logout");
         Image logout_img = new Image(getClass().getResourceAsStream("/icons/logout.png"));
         ImageView logout_imageView = new ImageView(logout_img);
-        logout_imageView.getStyleClass().add("nav_link");
+        logout_imageView.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         logout_imageView.setFitWidth(32);
         logout_imageView.setFitHeight(28);
         logout.setGraphic(logout_imageView);
-        logout.getStyleClass().add("nav_link");
+        logout.getStyleClass().add(NAV_LINK_STYLE_CLASS);
         logout.setPrefWidth(225);
         logout.setMaxWidth(Region.USE_COMPUTED_SIZE);
         logout.setPrefHeight(40);
@@ -484,7 +484,7 @@ public class MainLayoutController implements Initializable {
         for (Button button : navLinks) {
             if (button.isFocused()) {
                 button.setStyle("-fx-background-color: #FFC700, #00A300;" +
-                        "-fx-background-insets: 0, 0 0 0 4;");
+                        FX_BACKGROUND_INSETS);
             } else {
                 button.setStyle("-fx-background-color: #1B2434, #1E293B;" +
                         "-fx-background-insets: 0, 0 0 1 0;");
@@ -496,7 +496,7 @@ public class MainLayoutController implements Initializable {
     void navLinkMouseEntred(MouseEvent event) {
         Button button = (Button) event.getSource();
         button.setStyle("-fx-background-color: #FFC700,#00A300;" +
-                "-fx-background-insets: 0, 0 0 0 4;");
+                FX_BACKGROUND_INSETS);
     }
 
     @FXML
@@ -519,7 +519,7 @@ public class MainLayoutController implements Initializable {
 
         //logout if user clicks ok
         Optional<ButtonType> result = alert.showAndWait();
-        if (result.get() == ButtonType.OK) {
+        if (result.isPresent() && result.get() == ButtonType.OK) {
             Session.logoutUser();
             logoutSystem(login_view, event);
         }
@@ -532,7 +532,8 @@ public class MainLayoutController implements Initializable {
         try {
             scene = new Scene(fxmlLoader.load());
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            displayAlert("Error", "Could not load view: " + view, Alert.AlertType.ERROR);
+            return;
         }
         Stage stage = new Stage();
         stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
@@ -547,13 +548,15 @@ public class MainLayoutController implements Initializable {
 
     //get current logged in user
     private void getCurrentUser() {
-        User user = Session.getCurrentUser();
-        //capitalize first letter of first name
+        this.user = Session.getCurrentUser();
+        if (this.user == null) return;
+
         try {
-            String first_name = user.getFirstName().toLowerCase();
-            String first_letter = first_name.substring(0, 1).toUpperCase();
-            String rest_of_name = first_name.substring(1);
-            String name = first_letter + rest_of_name;
+            String firstName = this.user.getFirstName();
+            if (firstName == null || firstName.isBlank()) return;
+
+            String lower = firstName.toLowerCase();
+            String name = lower.substring(0, 1).toUpperCase() + lower.substring(1);
             user_name.setText(name);
         } catch (Exception e) {
             displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);

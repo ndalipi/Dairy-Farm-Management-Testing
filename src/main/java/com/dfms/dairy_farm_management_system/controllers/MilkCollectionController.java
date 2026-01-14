@@ -45,6 +45,14 @@ import static com.dfms.dairy_farm_management_system.connection.DBConfig.getConne
 import static com.dfms.dairy_farm_management_system.helpers.Helper.*;
 
 public class MilkCollectionController implements Initializable {
+    private static final String ERROR_TITLE = "Error";
+    private static final String ICON_STYLE = "-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;";
+    private static final String COL_COW_ID = "cow_id";
+    private static final String COL_QUANTITY = "quantity";
+    private static final String COL_PERIOD = "period";
+    private static final String COL_CREATED_AT = "created_at";
+
+
     MilkCollection mc;
     @FXML
     private Button refresh_table_btn;
@@ -111,10 +119,10 @@ public class MilkCollectionController implements Initializable {
         while (resultSet.next()) {
             MilkCollection milkCollection = new MilkCollection();
             milkCollection.setId(resultSet.getInt("id"));
-            milkCollection.setCow_id(resultSet.getString("cow_id"));
-            milkCollection.setQuantity(resultSet.getFloat("quantity"));
-            milkCollection.setPeriod(resultSet.getString("period"));
-            milkCollection.setCreated_at(resultSet.getTimestamp("created_at"));
+            milkCollection.setCow_id(resultSet.getString(COL_COW_ID));
+            milkCollection.setQuantity(resultSet.getFloat(COL_QUANTITY));
+            milkCollection.setPeriod(resultSet.getString(COL_PERIOD));
+            milkCollection.setCreated_at(resultSet.getTimestamp(COL_CREATED_AT));
 
 
             list.add(milkCollection);
@@ -136,141 +144,140 @@ public class MilkCollectionController implements Initializable {
 
     public void afficher() throws SQLException, ClassNotFoundException {
         ObservableList<MilkCollection> list = getMilkCollection();
-        id_col.setCellValueFactory(new PropertyValueFactory<MilkCollection, String>("cow_id"));
-        milk_col.setCellValueFactory(new PropertyValueFactory<MilkCollection, Float>("quantity"));
-        period_col.setCellValueFactory(new PropertyValueFactory<MilkCollection, String>("period"));
-        date_col.setCellValueFactory(new PropertyValueFactory<MilkCollection, Date>("created_at"));
 
+        id_col.setCellValueFactory(new PropertyValueFactory<>(COL_COW_ID));
+        milk_col.setCellValueFactory(new PropertyValueFactory<>(COL_QUANTITY));
+        period_col.setCellValueFactory(new PropertyValueFactory<>(COL_PERIOD));
+        date_col.setCellValueFactory(new PropertyValueFactory<>(COL_CREATED_AT));
 
-        Callback<TableColumn<MilkCollection, String>, TableCell<MilkCollection, String>> cellFoctory = (TableColumn<MilkCollection, String> param) -> {
-            // make cell containing buttons
-            final TableCell<MilkCollection, String> cell = new TableCell<MilkCollection, String>() {
+        actions_col.setCellFactory(col -> new ActionCell());
+        MilkCollectionTable.setItems(list);
+    }
 
+    private class ActionCell extends TableCell<MilkCollection, String> {
 
-                Image edit_img = new Image(getClass().getResourceAsStream("/images/edit.png"));
-                Image delete_img = new Image(getClass().getResourceAsStream("/images/delete.png"));
-                Image view_details_img = new Image(getClass().getResourceAsStream("/images/eye.png"));
+        private final Image editImg = new Image(getClass().getResourceAsStream("/images/edit.png"));
+        private final Image deleteImg = new Image(getClass().getResourceAsStream("/images/delete.png"));
+        private final Image viewImg = new Image(getClass().getResourceAsStream("/images/eye.png"));
 
-                @Override
-                public void updateItem(String item, boolean empty) {
-                    super.updateItem(item, empty);
-                    //that cell created only on non-empty rows
-                    if (empty) {
-                        setGraphic(null);
-                        setText(null);
+        @Override
+        protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
 
-                    } else {
-                        ImageView iv_view_details = new ImageView();
-                        iv_view_details.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
-                        iv_view_details.setImage(view_details_img);
-                        iv_view_details.setPreserveRatio(true);
-                        iv_view_details.setSmooth(true);
-                        iv_view_details.setCache(true);
+            if (empty) {
+                setGraphic(null);
+                setText(null);
+                return;
+            }
 
+            ImageView ivView = new ImageView(viewImg);
+            ivView.setStyle(ICON_STYLE);
+            ivView.setPreserveRatio(true);
+            ivView.setSmooth(true);
+            ivView.setCache(true);
 
-                        ImageView iv_edit = new ImageView();
-                        iv_edit.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
-                        iv_edit.setImage(edit_img);
-                        iv_edit.setPreserveRatio(true);
-                        iv_edit.setSmooth(true);
-                        iv_edit.setCache(true);
+            ImageView ivEdit = new ImageView(editImg);
+            ivEdit.setStyle(ICON_STYLE);
+            ivEdit.setPreserveRatio(true);
+            ivEdit.setSmooth(true);
+            ivEdit.setCache(true);
 
-                        ImageView iv_delete = new ImageView();
-                        iv_delete.setStyle("-fx-background-color: transparent;-fx-cursor: hand;-fx-size:15px;");
+            ImageView ivDelete = new ImageView(deleteImg);
+            ivDelete.setStyle(ICON_STYLE);
+            ivDelete.setPreserveRatio(true);
+            ivDelete.setSmooth(true);
+            ivDelete.setCache(true);
 
-                        iv_delete.setImage(delete_img);
-                        iv_delete.setPreserveRatio(true);
-                        iv_delete.setSmooth(true);
-                        iv_delete.setCache(true);
+            HBox managebtn = new HBox(ivView, ivEdit, ivDelete);
+            managebtn.setStyle("-fx-alignment:center");
+            HBox.setMargin(ivView, new Insets(1, 1, 0, 3));
+            HBox.setMargin(ivEdit, new Insets(1, 1, 0, 3));
+            HBox.setMargin(ivDelete, new Insets(1, 1, 0, 3));
 
-                        HBox managebtn = new HBox(iv_view_details, iv_edit, iv_delete);
-                        managebtn.setStyle("-fx-alignment:center");
-                        HBox.setMargin(iv_view_details, new Insets(1, 1, 0, 3));
-                        HBox.setMargin(iv_delete, new Insets(1, 1, 0, 3));
-                        HBox.setMargin(iv_edit, new Insets(1, 1, 0, 3));
+            setGraphic(managebtn);
+            setText(null);
 
-                        setGraphic(managebtn);
+            ivDelete.setOnMouseClicked(event -> {
+                MilkCollection mc = MilkCollectionTable.getSelectionModel().getSelectedItem();
+                if (mc == null) return;
 
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                alert.setTitle("Delete Confirmation");
+                alert.setHeaderText("Are you sure you want to delete this cow sale?");
+                Optional<ButtonType> result = alert.showAndWait();
 
-                        iv_delete.setOnMouseClicked((MouseEvent event) -> {
-                            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                            alert.setTitle("Delete Confirmation");
-                            alert.setHeaderText("Are you sure you want to delete this cow sale?");
-                            MilkCollection mc = MilkCollectionTable.getSelectionModel().getSelectedItem();
-                            Optional<ButtonType> result = alert.showAndWait();
-                            if (result.get() == ButtonType.OK) {
-                                try {
-                                    if (mc.delete()) {
-
-                                        displayAlert("success", "Milk Sale deleted successfully", Alert.AlertType.INFORMATION);
-                                        refreshTableMilkCollection();
-                                    } else {
-                                        displayAlert("Error", "Error while deleting!!!", Alert.AlertType.ERROR);
-
-                                    }
-                                } catch (Exception e) {
-                                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                                }
-
-                            }
-
-                            //displayAlert("Success", "Milk Collection deleted successfully", Alert.AlertType.INFORMATION);
-
-                        });
-                        iv_edit.setOnMouseClicked((MouseEvent event) -> {
-
-                            MilkCollection milkcollection = MilkCollectionTable.getSelectionModel().getSelectedItem();
-                            FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/add_new_milk_collection.fxml"));
-                            Scene scene = null;
-                            try {
-                                scene = new Scene(fxmlLoader.load());
-                            } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                                e.printStackTrace();
-                            }
-                            NewMilkCollectionController newMilkCollectionController = fxmlLoader.getController();
-                            newMilkCollectionController.setUpdate(true);
-                            newMilkCollectionController.fetchMilkCollection(milkcollection);
-                            Stage stage = new Stage();
-                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
-                            stage.setTitle("Update MilkCollection");
-                            stage.setResizable(false);
-                            stage.setScene(scene);
-                            centerScreen(stage);
-                            stage.show();
-                        });
-                        iv_view_details.setOnMouseClicked((MouseEvent event) -> {
-                            MilkCollection mc = MilkCollectionTable.getSelectionModel().getSelectedItem();
-                            FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource("/com/dfms/dairy_farm_management_system/popups/milkcollection_details.fxml"));
-                            Scene scene = null;
-                            try {
-                                scene = new Scene(fxmlLoader.load());
-                                MilkCollectionlDetailsController controller = fxmlLoader.getController();
-                                controller.fetchMilkCollection(mc.getId(), mc.getCow_id(), mc.getPeriod(), mc.getQuantity(), mc.getCreated_at());
-                            } catch (IOException e) {
-                                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                                e.printStackTrace();
-                            }
-                            Stage stage = new Stage();
-                            stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
-                            stage.setTitle("Milk Collection  Details");
-                            stage.setResizable(false);
-                            stage.setScene(scene);
-                            centerScreen(stage);
-                            stage.show();
-                        });
+                if (result.isPresent() && result.get() == ButtonType.OK) {
+                    try {
+                        if (mc.delete()) {
+                            displayAlert("success", "Milk Sale deleted successfully", Alert.AlertType.INFORMATION);
+                            refreshTableMilkCollection();
+                        } else {
+                            displayAlert(ERROR_TITLE, "Error while deleting!!!", Alert.AlertType.ERROR);
+                        }
+                    } catch (Exception e) {
+                        displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
                     }
                 }
+            });
 
+            ivEdit.setOnMouseClicked(event -> {
+                MilkCollection milkcollection = MilkCollectionTable.getSelectionModel().getSelectedItem();
+                if (milkcollection == null) return;
 
-            };
-            return cell;
-        };
+                FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource(
+                        "/com/dfms/dairy_farm_management_system/popups/add_new_milk_collection.fxml"
+                ));
 
-        actions_col.setCellFactory(cellFoctory);
-        MilkCollectionTable.setItems(list);
+                Scene scene;
+                try {
+                    scene = new Scene(fxmlLoader.load());
+                } catch (IOException e) {
+                    displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+                    return;
+                }
 
+                NewMilkCollectionController newMilkCollectionController = fxmlLoader.getController();
+                newMilkCollectionController.setUpdate(true);
+                newMilkCollectionController.fetchMilkCollection(milkcollection);
+
+                Stage stage = new Stage();
+                stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
+                stage.setTitle("Update MilkCollection");
+                stage.setResizable(false);
+                stage.setScene(scene);
+                centerScreen(stage);
+                stage.show();
+            });
+
+            ivView.setOnMouseClicked(event -> {
+                MilkCollection mc = MilkCollectionTable.getSelectionModel().getSelectedItem();
+                if (mc == null) return;
+
+                FXMLLoader fxmlLoader = new FXMLLoader(Main.class.getResource(
+                        "/com/dfms/dairy_farm_management_system/popups/milkcollection_details.fxml"
+                ));
+
+                Scene scene;
+                try {
+                    scene = new Scene(fxmlLoader.load());
+                    MilkCollectionlDetailsController controller = fxmlLoader.getController();
+                    controller.fetchMilkCollection(mc.getId(), mc.getCow_id(), mc.getPeriod(), mc.getQuantity(), mc.getCreated_at());
+                } catch (IOException e) {
+                    displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
+                    return;
+                }
+
+                Stage stage = new Stage();
+                stage.getIcons().add(new Image("file:src/main/resources/images/logo.png"));
+                stage.setTitle("Milk Collection  Details");
+                stage.setResizable(false);
+                stage.setScene(scene);
+                centerScreen(stage);
+                stage.show();
+            });
+        }
     }
+
 
     private Statement statemeent;
     private Connection connection = getConnection();
@@ -278,111 +285,54 @@ public class MilkCollectionController implements Initializable {
     void exportToExcel() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
-        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"), new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"),
+                new FileChooser.ExtensionFilter("CSV Files", "*.csv")
+        );
+
         File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try {
-                Workbook workbook = new XSSFWorkbook();
-                Sheet sheet = workbook.createSheet("Milk Collection");
-                Row header = sheet.createRow(0);
-                header.createCell(0).setCellValue("Milk Collection ID");
-                header.createCell(1).setCellValue("Cow ID");
-                header.createCell(2).setCellValue("Milk Quantity");
-                header.createCell(3).setCellValue("Collection Period");
-                header.createCell(4).setCellValue("Collection Date");
+        if (file == null) {
+            return;
+        }
 
+        String query = "SELECT id, cow_id, quantity, period, created_at FROM milk_collections";
 
-                //get all employees from database
-                String query = "SELECT * FROM `milk_collections`";
-                try {
+        try (Workbook workbook = new XSSFWorkbook();
+             FileOutputStream fileOutputStream = new FileOutputStream(file);
+             Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(query)) {
 
-                    statemeent = connection.createStatement();
-                    ResultSet rs = statemeent.executeQuery(query);
-                    while (rs.next()) {
-                        int rowNum = rs.getRow();
-                        Row row = sheet.createRow(rowNum);
-                        row.createCell(0).setCellValue(rs.getString("id"));
-                        row.createCell(1).setCellValue(rs.getString("cow_id"));
-                        row.createCell(2).setCellValue(rs.getString("quantity"));
-                        row.createCell(3).setCellValue(rs.getString("period"));
-                        row.createCell(4).setCellValue(rs.getString("created_at"));
+            Sheet sheet = workbook.createSheet("Milk Collection");
 
-                    }
-                } catch (Exception e) {
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                }
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("Milk Collection ID");
+            header.createCell(1).setCellValue("Cow ID");
+            header.createCell(2).setCellValue("Milk Quantity");
+            header.createCell(3).setCellValue("Collection Period");
+            header.createCell(4).setCellValue("Collection Date");
 
+            int rowNum = 1; // start after header
+            while (rs.next()) {
+                Row row = sheet.createRow(rowNum++);
 
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                workbook.write(fileOutputStream);
-                workbook.close();
-
-                displayAlert("Success", "Milk Collection exported successfully", Alert.AlertType.INFORMATION);
-            } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                row.createCell(0).setCellValue(rs.getString("id"));
+                row.createCell(1).setCellValue(rs.getString(COL_COW_ID));
+                row.createCell(2).setCellValue(rs.getString(COL_QUANTITY));
+                row.createCell(3).setCellValue(rs.getString(COL_PERIOD));
+                row.createCell(4).setCellValue(rs.getString(COL_CREATED_AT));
             }
+
+            workbook.write(fileOutputStream);
+            displayAlert("Success", "Milk Collection exported successfully", Alert.AlertType.INFORMATION);
+
+        } catch (Exception e) {
+            displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
         }
     }
 
     private static int COLUMNS_COUNT = 4;
 
     void exportToPDF() {
-//        FileChooser fileChooser = new FileChooser();
-//        fileChooser.setTitle("Save As");
-//        fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
-//        File file = fileChooser.showSaveDialog(null);
-//        if (file != null) {
-//            try {
-//                Document document = new Document();
-//                PdfWriter.getInstance(document, new FileOutputStream(file));
-//                document.open();
-//                try {
-//                    document.add(new Paragraph(Element.ALIGN_CENTER, "Stock Report", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, Font.BOLD)));
-//                    document.add(new Paragraph(" "));
-//                } catch (Exception e) {
-//                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-//                }
-//                PdfPTable table = new PdfPTable(9);
-//                table.addCell("Product ID");
-//                table.addCell("Product Name");
-//                table.addCell("Product Type");
-//                table.addCell("Quantity");
-//                table.addCell("Availability");
-//                table.addCell("Unit");
-//                table.addCell("Added Date");
-//
-//                //make pdf page width bigger
-//                table.setWidthPercentage(100);
-//                table.setSpacingBefore(10f);
-//                table.setSpacingAfter(10f);
-//
-//                //get all employees from database
-//                String query = "SELECT * FROM `stocks`";
-//                try {
-//                    statement = connection.createStatement();
-//                    ResultSet rs = statement.executeQuery(query);
-//                    while (rs.next()) {
-//                        table.addCell(rs.getString("id"));
-//                        table.addCell(rs.getString("name"));
-//                        table.addCell(rs.getString("type"));
-//                        table.addCell(rs.getString("quantity"));
-//                        table.addCell(rs.getString("availability"));
-//                        table.addCell(rs.getString("unit"));
-//                        table.addCell(rs.getString("created_at"));
-//                    }
-//
-//                    document.add(table);
-//                    document.close();
-//                    displayAlert("Success", "Stcok exported successfully", Alert.AlertType.INFORMATION);
-//                } catch (Exception e) {
-//                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-//                }
-//            } catch (Exception e) {
-//                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-//            }
-//        }
-//    }
-
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
         fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
@@ -390,55 +340,63 @@ public class MilkCollectionController implements Initializable {
         if (file != null) {
             try {
                 Document document = new Document();
-                //change document orientation to landscape
+                // change document orientation to landscape
                 document.setPageSize(PageSize.A4.rotate());
 
                 PdfWriter.getInstance(document, new FileOutputStream(file));
                 document.open();
-                try {
-                    Paragraph title = new Paragraph("Milk Collections List", FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK));
-                    Paragraph text = new Paragraph("This is the list of Milk Collections", FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK));
 
-                    //center paragraph
-                    title.setAlignment(Element.ALIGN_CENTER);
-                    text.setAlignment(Element.ALIGN_CENTER);
-                    title.setSpacingAfter(30);
-                    text.setSpacingAfter(30);
+                // ✅ removed nested try-catch (Sonar S1141)
+                Paragraph title = new Paragraph(
+                        "Milk Collections List",
+                        FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK)
+                );
+                Paragraph text = new Paragraph(
+                        "This is the list of Milk Collections",
+                        FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK)
+                );
 
-                    document.add(title);
-                    document.add(text);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
-                }
+                // center paragraph
+                title.setAlignment(Element.ALIGN_CENTER);
+                text.setAlignment(Element.ALIGN_CENTER);
+                title.setSpacingAfter(30);
+                text.setSpacingAfter(30);
+
+                document.add(title);
+                document.add(text);
+
                 PdfPTable table = new PdfPTable(COLUMNS_COUNT);
 
-                //change pdf orientation to landscape
+                // change pdf orientation to landscape
                 table.setWidthPercentage(100);
                 table.setSpacingBefore(11f);
                 table.setSpacingAfter(11f);
+
                 float[] colWidth = new float[COLUMNS_COUNT];
                 for (int i = 0; i < COLUMNS_COUNT; i++) {
                     colWidth[i] = 2f;
                 }
+                table.setWidths(colWidth); // ✅ you were missing this line (like your other PDF exports)
 
-                //add table header
-                table.addCell(new PdfPCell(new Paragraph("Cow ID", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Quantity", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Period", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Collection date", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                // add table header
+                table.addCell(new PdfPCell(new Paragraph("Cow ID",
+                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph("Quantity",
+                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph("Period",
+                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                table.addCell(new PdfPCell(new Paragraph("Collection date",
+                        FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
 
-                //add padding to cells
+                // add padding to cells
                 table.getDefaultCell().setPadding(3);
                 table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
                 table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
 
-
-                //get employees displayed in table
+                // get collections displayed in table
                 ObservableList<MilkCollection> milkCollections = MilkCollectionTable.getItems();
 
-                //get employee of each row
-                //used a method in my updateEmplyeeController to get the employee of each row based on the cin
+                // get collection of each row
                 NewMilkCollectionController controller = new NewMilkCollectionController();
 
                 for (MilkCollection milkCollection : milkCollections) {
@@ -448,14 +406,16 @@ public class MilkCollectionController implements Initializable {
                     table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkCol.getQuantity())))).setPadding(5);
                     table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkCol.getPeriod())))).setPadding(5);
                     table.addCell(new PdfPCell(new Paragraph(String.valueOf(milkCol.getCreated_at())))).setPadding(5);
-
                 }
 
                 document.add(table);
                 document.close();
+
                 displayAlert("Success", "Milk Collections exported successfully", Alert.AlertType.INFORMATION);
+
             } catch (Exception e) {
-                displayAlert("Error", e.getMessage(), Alert.AlertType.ERROR);
+                e.printStackTrace(); // optional but useful to debug
+                displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
     }
@@ -504,6 +464,4 @@ public class MilkCollectionController implements Initializable {
         refreshTableMilkCollection();
 
     }
-
-
 }
