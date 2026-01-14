@@ -13,10 +13,6 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
-import javafx.print.*;
-
-import java.awt.print.*;
-
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -63,32 +59,23 @@ public class StockController implements Initializable {
     private static final String ICON_EDIT_PATH = "/images/edit.png";
     private static final String ICON_DELETE_PATH = "/images/delete.png";
 
-    @Override
-    public void initialize(URL url, ResourceBundle resourceBundle) {
-        //this line of code is so important for the export !!!!
-        BasicConfigurator.configure();
+    private static final int COLUMNS_COUNT = 7;
 
-        ObservableList<String> list = FXCollections.observableArrayList("PDF", "Excel");
-        export_combo.setItems(list);
-        displayStock();
+    private static final String EXPORT_QUERY =
+            "SELECT id, name, type, Quantity, unit, created_at FROM stocks";
 
-        export_combo.getSelectionModel().selectedItemProperty().addListener((observableValue, s, t1) -> {
-            if (t1.equals("PDF")) {
-                exportToPDF();
-            } else {
-                exportToExcel();
-            }
-        });
-
-        liveSearch(search_stock_input, stock_table);
-    }
-
-    private static int COLUMNS_COUNT = 7;
-    private Connection connection = getConnection();
+    private static final String[] EXPORT_HEADERS = {
+            "Product ID",
+            "Product Name",
+            "Product Type",
+            COLUMN_QUANTITY,
+            "Availability",
+            "Unit",
+            "Added Date"
+    };
 
     @FXML
     private TableColumn<Stock, String> actions_col;
-
 
     @FXML
     private TableColumn<Stock, String> product_qunatity_col;
@@ -116,6 +103,26 @@ public class StockController implements Initializable {
 
     @FXML
     private TableView<Stock> stock_table;
+
+    @Override
+    public void initialize(URL url, ResourceBundle resourceBundle) {
+        //this line of code is so important for the export !!!!
+        BasicConfigurator.configure();
+
+        ObservableList<String> list = FXCollections.observableArrayList("PDF", "Excel");
+        export_combo.setItems(list);
+        displayStock();
+
+        export_combo.getSelectionModel().selectedItemProperty().addListener((observableValue, s, t1) -> {
+            if (t1.equals("PDF")) {
+                exportToPDF();
+            } else {
+                exportToExcel();
+            }
+        });
+
+        liveSearch(search_stock_input, stock_table);
+    }
 
     public ObservableList<Stock> getProducts() {
         ObservableList<Stock> products = FXCollections.observableArrayList();
@@ -147,7 +154,6 @@ public class StockController implements Initializable {
 
         return products;
     }
-
 
     public void displayStock() {
         ObservableList<Stock> products = getProducts();
@@ -256,9 +262,6 @@ public class StockController implements Initializable {
         }
     }
 
-
-
-
     @FXML
     void openAddProduct(MouseEvent event) throws IOException {
         openNewWindow("Add Product", "add_new_product");
@@ -284,38 +287,32 @@ public class StockController implements Initializable {
         }
 
         try (Workbook workbook = new XSSFWorkbook();
-             FileOutputStream fileOutputStream = new FileOutputStream(file)) {
+             FileOutputStream fileOutputStream = new FileOutputStream(file);
+             Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(EXPORT_QUERY);
+             ResultSet rs = ps.executeQuery()) {
 
             Sheet sheet = workbook.createSheet("Stock");
             Row header = sheet.createRow(0);
 
-            header.createCell(0).setCellValue("Product ID");
-            header.createCell(1).setCellValue("Product Name");
-            header.createCell(2).setCellValue("Product Type");
-            header.createCell(3).setCellValue(COLUMN_QUANTITY);
-            header.createCell(4).setCellValue("Availability");
-            header.createCell(5).setCellValue("Unit");
-            header.createCell(6).setCellValue("Added Date");
-
-            String query = "SELECT * FROM `stocks`";
-
-            try (Statement stmt = connection.createStatement();
-                 ResultSet rs = stmt.executeQuery(query)) {
-
-                while (rs.next()) {
-                    int rowNum = rs.getRow();
-                    Row row = sheet.createRow(rowNum);
-
-                    row.createCell(0).setCellValue(rs.getString("id"));
-                    row.createCell(1).setCellValue(rs.getString("name"));
-                    row.createCell(2).setCellValue(rs.getString("type"));
-                    row.createCell(3).setCellValue(rs.getString(COLUMN_QUANTITY));
-                    row.createCell(4).setCellValue(rs.getString("availability"));
-                    row.createCell(5).setCellValue(rs.getString("unit"));
-                    row.createCell(6).setCellValue(rs.getString("created_at"));
-                }
+            for (int i = 0; i < EXPORT_HEADERS.length; i++) {
+                header.createCell(i).setCellValue(EXPORT_HEADERS[i]);
             }
 
+            int rowNum = 1;
+            while (rs.next()) {
+                Row row = sheet.createRow(rowNum++);
+
+                float quantity = rs.getFloat(COLUMN_QUANTITY);
+
+                row.createCell(0).setCellValue(rs.getString("id"));
+                row.createCell(1).setCellValue(rs.getString("name"));
+                row.createCell(2).setCellValue(rs.getString("type"));
+                row.createCell(3).setCellValue(String.valueOf(quantity));
+                row.createCell(4).setCellValue(quantity > 0 ? "Available" : "Not Available");
+                row.createCell(5).setCellValue(rs.getString("unit"));
+                row.createCell(6).setCellValue(rs.getString("created_at"));
+            }
 
             workbook.write(fileOutputStream);
             displayAlert(SUCCESS_TITLE, "Stock exported successfully", Alert.AlertType.INFORMATION);
@@ -325,72 +322,60 @@ public class StockController implements Initializable {
         }
     }
 
-
     void exportToPDF() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save As");
         fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("PDF Files", "*.pdf"));
         File file = fileChooser.showSaveDialog(null);
         if (file != null) {
-            try {
-                Document document = new Document();
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(EXPORT_QUERY);
+                 ResultSet rs = ps.executeQuery()) {
 
+                Document document = new Document();
                 document.setPageSize(PageSize.A4.rotate());
 
                 PdfWriter.getInstance(document, new FileOutputStream(file));
                 document.open();
-                try {
-                    Paragraph title = new Paragraph("Stock List", FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK));
-                    Paragraph text = new Paragraph("This is the list of the products", FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK));
 
-                    title.setAlignment(Element.ALIGN_CENTER);
-                    text.setAlignment(Element.ALIGN_CENTER);
-                    title.setSpacingAfter(30);
-                    text.setSpacingAfter(30);
+                Paragraph title = new Paragraph("Stock List", FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK));
+                Paragraph text = new Paragraph("This is the list of the products", FontFactory.getFont(FontFactory.COURIER, 14, BaseColor.BLACK));
 
-                    document.add(title);
-                    document.add(text);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
-                }
+                title.setAlignment(Element.ALIGN_CENTER);
+                text.setAlignment(Element.ALIGN_CENTER);
+                title.setSpacingAfter(30);
+                text.setSpacingAfter(30);
+
+                document.add(title);
+                document.add(text);
+
                 PdfPTable table = new PdfPTable(COLUMNS_COUNT);
-
                 table.setWidthPercentage(100);
                 table.setSpacingBefore(11f);
                 table.setSpacingAfter(11f);
+
                 float[] colWidth = new float[COLUMNS_COUNT];
                 for (int i = 0; i < COLUMNS_COUNT; i++) {
                     colWidth[i] = 2f;
                 }
                 table.setWidths(colWidth);
 
-                table.addCell(new PdfPCell(new Paragraph("Product ID", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Product Name", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Product Type", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph(COLUMN_QUANTITY, FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Availability", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Unit", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
-                table.addCell(new PdfPCell(new Paragraph("Added Date", FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)))).setPadding(5);
+                for (String header : EXPORT_HEADERS) {
+                    PdfPCell cell = new PdfPCell(new Paragraph(header, FontFactory.getFont(FontFactory.COURIER_BOLD, 12, BaseColor.BLACK)));
+                    cell.setPadding(5);
+                    table.addCell(cell);
+                }
 
-                table.getDefaultCell().setPadding(3);
-                table.getDefaultCell().setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.getDefaultCell().setVerticalAlignment(Element.ALIGN_MIDDLE);
+                while (rs.next()) {
+                    float quantity = rs.getFloat(COLUMN_QUANTITY);
 
-                ObservableList<Stock> stock = stock_table.getItems();
-
-                UpdateProductController controller = new UpdateProductController();
-
-                for (Stock s : stock) {
-                    Stock product = controller.getProduct(s.getId());
-                    System.out.println(product.toString());
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(product.getId())))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(product.getName()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(product.getType()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(product.getQuantity())))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(product.getAvailability()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(product.getUnit()))).setPadding(5);
-                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(product.getCreatedAt())))).setPadding(5);
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("id"))));
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("name"))));
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("type"))));
+                    table.addCell(new PdfPCell(new Paragraph(String.valueOf(quantity))));
+                    table.addCell(new PdfPCell(new Paragraph(quantity > 0 ? "Available" : "Not Available")));
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("unit"))));
+                    table.addCell(new PdfPCell(new Paragraph(rs.getString("created_at"))));
                 }
 
                 document.add(table);
@@ -410,7 +395,8 @@ public class StockController implements Initializable {
                 ObservableList<Stock> filteredList = FXCollections.observableArrayList();
                 ObservableList<Stock> products = getProducts();
                 for (Stock product : products) {
-                    if (product.getName().toLowerCase().contains(newValue.toLowerCase()) || product.getType().toLowerCase().contains(newValue.toLowerCase())) {
+                    if (product.getName().toLowerCase().contains(newValue.toLowerCase())
+                            || product.getType().toLowerCase().contains(newValue.toLowerCase())) {
                         filteredList.add(product);
                     }
                 }
