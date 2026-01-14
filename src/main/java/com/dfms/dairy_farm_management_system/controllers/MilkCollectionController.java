@@ -25,7 +25,6 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import javafx.util.Callback;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -346,7 +345,6 @@ public class MilkCollectionController implements Initializable {
                 PdfWriter.getInstance(document, new FileOutputStream(file));
                 document.open();
 
-                // ✅ removed nested try-catch (Sonar S1141)
                 Paragraph title = new Paragraph(
                         "Milk Collections List",
                         FontFactory.getFont(FontFactory.COURIER_BOLD, 20, BaseColor.BLACK)
@@ -376,7 +374,7 @@ public class MilkCollectionController implements Initializable {
                 for (int i = 0; i < COLUMNS_COUNT; i++) {
                     colWidth[i] = 2f;
                 }
-                table.setWidths(colWidth); // ✅ you were missing this line (like your other PDF exports)
+                table.setWidths(colWidth);
 
                 // add table header
                 table.addCell(new PdfPCell(new Paragraph("Cow ID",
@@ -414,7 +412,6 @@ public class MilkCollectionController implements Initializable {
                 displayAlert("Success", "Milk Collections exported successfully", Alert.AlertType.INFORMATION);
 
             } catch (Exception e) {
-                e.printStackTrace(); // optional but useful to debug
                 displayAlert(ERROR_TITLE, e.getMessage(), Alert.AlertType.ERROR);
             }
         }
@@ -449,7 +446,6 @@ public class MilkCollectionController implements Initializable {
         });
     }
 
-
     @FXML
     void openAddNewMilkCollection(MouseEvent event) throws IOException {
         openNewWindow("Add Milk Collection", "add_new_milk_collection");
@@ -460,8 +456,6 @@ public class MilkCollectionController implements Initializable {
 
     @FXML
     void refreshTable(MouseEvent event) throws SQLException {
-
         refreshTableMilkCollection();
-
     }
 }
