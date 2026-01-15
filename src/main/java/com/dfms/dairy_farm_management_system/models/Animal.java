@@ -222,4 +222,8 @@ public class Animal {
         }
     }
 
+    //method created to do BVT
+    public boolean isValidAge(int age) {
+        return age >= 0 && age <= 30;
+    }
 }

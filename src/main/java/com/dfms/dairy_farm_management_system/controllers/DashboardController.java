@@ -249,4 +249,12 @@ public class DashboardController implements Initializable {
             return 0;
         }
     }
+
+    //method created to do BVT
+    public double clampDailyEarnings(double earnings) {
+        if (earnings < 0) return 0;
+        if (earnings > 1_000_000) return 1_000_000;
+        return earnings;
+    }
+
 }

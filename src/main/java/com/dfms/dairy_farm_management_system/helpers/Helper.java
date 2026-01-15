@@ -245,4 +245,12 @@ public class Helper {
     public static String formatString(String string, int length) {
         return StringUtils.rightPad(string, length);
     }
+
+    //method created to do BVT
+    public static int normalizePercentage(int value) {
+        if (value < 0) return 0;
+        if (value > 100) return 100;
+        return value;
+    }
+
 }

@@ -209,4 +209,10 @@ public class LoginController implements Initializable {
             displayAlert("Error", "Failed to open main layout.", Alert.AlertType.ERROR);
         }
     }
+
+    //method created to do BVT
+    public boolean isValidLoginAttempts(int attempts) {
+        return attempts >= 0 && attempts <= 5;
+    }
+
 }
