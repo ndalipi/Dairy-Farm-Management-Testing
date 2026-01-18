@@ -4,25 +4,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Equivalence Class Testing (SAFE - does not modify real DB data)
- * Class under test: Client
- * Method under test: update()
- *
- * Safety approach:
- *  - Use IDs that should not exist (e.g., Integer.MAX_VALUE) so UPDATE affects 0 rows
- *  - Result should be false, and no real data is changed.
- *
- * Equivalence classes (based on typical update input partitions):
- *  EC1: Valid-looking fields + non-existing ID -> update should fail (0 rows affected)
- *  EC2: Invalid ID (0 or negative)            -> update should fail
- *  EC3: Invalid email format                  -> update should fail (still 0 rows due to non-existing ID)
- *  EC4: Missing required field (empty name)   -> update should fail (still 0 rows due to non-existing ID)
- *
- * Note:
- *  Client.update() does not validate fields itself; it relies on DB update result.
- *  These tests are designed to be non-destructive.
- */
 class ClientUpdateEquivalenceTest {
 
     private Client buildClientWithId(int id) {
