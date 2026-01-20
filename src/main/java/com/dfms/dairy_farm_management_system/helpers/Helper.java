@@ -157,15 +157,22 @@ public class Helper {
     }
 
 
-    //validate email input
+    // validate email input
     public static void validateEmailInput(TextField textField) {
         textField.textProperty().addListener(
                 (ObservableValue<? extends String> obs, String oldValue, String newValue) -> {
-                    boolean valid = newValue.matches(EMAIL_REGEX);
+
+                    boolean notEmpty = newValue != null && !newValue.isBlank();
+                    boolean hasAtSymbol = newValue != null && newValue.contains("@");
+                    boolean matchesRegex = newValue != null && newValue.matches(EMAIL_REGEX);
+
+                    boolean valid = notEmpty && hasAtSymbol && matchesRegex;
+
                     textField.setStyle(valid ? STYLE_OK : STYLE_ERROR);
                 }
         );
     }
+
 
 
     //validate password input

@@ -69,4 +69,27 @@ class HelperValidateEmailInputCoverageTest {
         runFxAndWait(() -> tf.setText("a_b.c-d@domain.co"));
         assertEquals("-fx-border-color: transparent", tf.getStyle());
     }
+    @Test
+    void emailWithoutAtSymbol_shouldBeInvalid() {
+        TextField tf = new TextField();
+        runFxAndWait(() -> Helper.validateEmailInput(tf));
+
+        runFxAndWait(() -> tf.setText("johndoe.example.com"));
+
+        assertEquals("-fx-border-color: red", tf.getStyle());
+    }
+
+    @Test
+    void blankEmail_shouldBeInvalid() {
+        TextField tf = new TextField();
+        runFxAndWait(() -> Helper.validateEmailInput(tf));
+
+        // force a real change event first
+        runFxAndWait(() -> tf.setText("x"));
+        runFxAndWait(() -> tf.setText(""));
+
+        assertEquals("-fx-border-color: red", tf.getStyle());
+    }
+
+
 }
