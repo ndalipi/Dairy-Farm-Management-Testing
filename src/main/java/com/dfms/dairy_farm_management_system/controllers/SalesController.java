@@ -493,11 +493,11 @@ public class SalesController implements Initializable {
         });
     }
 
-    private boolean safeContains(String text, String query) {
+    boolean safeContains(String text, String query) {
         return safeLower(text).contains(safeLower(query));
     }
 
-    private String safeLower(String s) {
+    String safeLower(String s) {
         return s == null ? "" : s.toLowerCase();
     }
 
