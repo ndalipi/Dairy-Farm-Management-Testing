@@ -66,9 +66,115 @@ class HelperIntegrationTest {
                 "validatePassword should return false for wrong password");
     }
 
-    // OPTIONAL DB Integration: Helper.getRoles()
-    // This test may fail if roles.name has a strict length constraint.
+    // -------------------------
+    // 7 ADDITIONAL TESTS
+    // -------------------------
 
+    @Test
+    void validatePassword_nonExistingEmail_returnsFalse() {
+        LoginController controller = new LoginController();
+
+        boolean result = assertDoesNotThrow(
+                () -> controller.validatePassword("does_not_exist_" + System.nanoTime() + "@test.com", "Pass123!"),
+                "validatePassword should not throw for non-existing user"
+        );
+        assertFalse(result, "validatePassword should return false if email doesn't exist");
+    }
+
+    @Test
+    void validatePassword_sqlInjectionLikeEmail_returnsFalse() throws Exception {
+        String plainPassword = "Pass123!";
+        insertedUserId = insertTestUser(testEmail, encryptPassword(plainPassword));
+
+        LoginController controller = new LoginController();
+
+        String injection = "' OR '1'='1";
+        boolean result = assertDoesNotThrow(
+                () -> controller.validatePassword(injection, plainPassword),
+                "validatePassword should not throw for suspicious input"
+        );
+
+        assertFalse(result, "validatePassword must not be bypassed by SQL injection-like input");
+    }
+
+    @Test
+    void validatePassword_nullEmail_returnsFalseAndDoesNotThrow() {
+        LoginController controller = new LoginController();
+
+        boolean result = assertDoesNotThrow(
+                () -> controller.validatePassword(null, "Pass123!"),
+                "validatePassword should handle null email safely"
+        );
+
+        assertFalse(result, "validatePassword should return false for null email");
+    }
+
+    @Test
+    void validatePassword_nullPassword_returnsFalseAndDoesNotThrow() throws Exception {
+        String plainPassword = "Pass123!";
+        insertedUserId = insertTestUser(testEmail, encryptPassword(plainPassword));
+
+        LoginController controller = new LoginController();
+
+        boolean result = assertDoesNotThrow(
+                () -> controller.validatePassword(testEmail, null),
+                "validatePassword should handle null password safely"
+        );
+
+        assertFalse(result, "validatePassword should return false for null password");
+    }
+
+    @Test
+    void validatePassword_emptyPassword_returnsFalse() throws Exception {
+        String plainPassword = "Pass123!";
+        insertedUserId = insertTestUser(testEmail, encryptPassword(plainPassword));
+
+        LoginController controller = new LoginController();
+        boolean result = assertDoesNotThrow(
+                () -> controller.validatePassword(testEmail, ""),
+                "validatePassword should not throw for empty password"
+        );
+
+        assertFalse(result, "validatePassword should return false for empty password");
+    }
+
+    @Test
+    void insertTestUser_shouldInsertRowAndReturnValidId() throws Exception {
+        String plainPassword = "Pass123!";
+        insertedUserId = insertTestUser(testEmail, encryptPassword(plainPassword));
+
+        assertTrue(insertedUserId > 0, "Inserted user id should be a positive number");
+
+        // Verify row exists and ID matches DB record
+        try (Connection con = getConnection();
+             PreparedStatement ps = con.prepareStatement("SELECT id FROM users WHERE email = ? LIMIT 1")) {
+            ps.setString(1, testEmail);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next(), "Inserted user should exist in DB");
+                assertEquals(insertedUserId, rs.getInt("id"), "DB id should match returned generated id");
+            }
+        }
+    }
+
+    @Test
+    void insertTestUser_roleOrRoleIdColumn_shouldBeSetToOne() throws Exception {
+        String plainPassword = "Pass123!";
+        insertedUserId = insertTestUser(testEmail, encryptPassword(plainPassword));
+
+        try (Connection con = getConnection()) {
+            String roleColumn = columnExists(con, "users", "role") ? "role" : "role_id";
+
+            try (PreparedStatement ps = con.prepareStatement(
+                    "SELECT " + roleColumn + " FROM users WHERE id = ? LIMIT 1"
+            )) {
+                ps.setInt(1, insertedUserId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next(), "Expected inserted user row to be found");
+                    assertEquals(1, rs.getInt(roleColumn), roleColumn + " should be set to 1 for inserted test user");
+                }
+            }
+        }
+    }
     @Test
     @Disabled("Enable only if DBConfig points to a SAFE TEST database with a 'roles' table")
     void getRoles_shouldReturnInsertedRoleFromDatabase() throws Exception {
