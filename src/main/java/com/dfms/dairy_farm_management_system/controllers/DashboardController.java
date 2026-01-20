@@ -256,5 +256,13 @@ public class DashboardController implements Initializable {
         if (earnings > 1_000_000) return 1_000_000;
         return earnings;
     }
+    // method created to demonstrate Statement/Branch/Condition/MC/DC coverage
+    public boolean isValidEarningsInput(Double earnings, boolean allowNull) {
+        if ((earnings == null && !allowNull) || (earnings != null && earnings < 0)) {
+            return false;
+        }
+        return true;
+    }
+
 
 }

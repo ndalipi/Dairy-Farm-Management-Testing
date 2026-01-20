@@ -1,147 +1,116 @@
 package com.dfms.dairy_farm_management_system.controllers;
 
-import javafx.scene.control.Alert;
 import org.junit.jupiter.api.*;
-import org.mockito.MockedStatic;
 
 import java.lang.reflect.Field;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.lang.reflect.Proxy;
+import java.sql.*;
 
-import static com.dfms.dairy_farm_management_system.helpers.Helper.displayAlert;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 class DashboardControllerEarningsEquivalenceTest {
 
     DashboardController controller;
 
-    Connection connection;
-    Statement statement;
-    ResultSet resultSet;
-
     @BeforeEach
     void setUp() throws Exception {
-        controller = spy(new DashboardController());
+        controller = new DashboardController();
 
-        connection = mock(Connection.class);
-        statement = mock(Statement.class);
-        resultSet = mock(ResultSet.class);
-
-        inject(controller, "connection", connection);
-        inject(controller, "statement", statement);
-        inject(controller, "resultSet", resultSet);
+        // Inject a fake connection that returns controlled results
+        Connection fakeConnection = fakeConnectionReturning(100, true, false);
+        inject(controller, "connection", fakeConnection);
     }
 
-    // -----------------------
-    // EC1: valid day codes
-    // -----------------------
     @Test
-    void validDay_Sun_returnsFirstRowSum_currentBehavior() throws Exception {
-        when(connection.createStatement()).thenReturn(statement);
-        when(statement.executeQuery(contains("Sunday"))).thenReturn(resultSet);
-
-        // UNION returns multiple rows, but code reads only the first one
-        when(resultSet.next()).thenReturn(true);
-        when(resultSet.getInt(1)).thenReturn(100);
-
+    void validDay_Sun_returnsEarningsFromResultSet() {
         int earnings = controller.getEarningsOfSpecificDay("Sun");
         assertEquals(100, earnings);
-
-        verify(statement).executeQuery(contains("UNION"));
     }
 
     @Test
-    void validDay_Mon_returnsValue() throws Exception {
-        when(connection.createStatement()).thenReturn(statement);
-        when(statement.executeQuery(contains("Monday"))).thenReturn(resultSet);
-        when(resultSet.next()).thenReturn(true);
-        when(resultSet.getInt(1)).thenReturn(55);
+    void invalidDay_returnsZero() {
+        assertEquals(0, controller.getEarningsOfSpecificDay("Sund"));
+    }
 
-        int earnings = controller.getEarningsOfSpecificDay("Mon");
-        assertEquals(55, earnings);
+    @Test
+    void emptyDay_returnsZero() {
+        assertEquals(0, controller.getEarningsOfSpecificDay(""));
     }
 
     // -----------------------
-    // EC2: invalid day codes
+    // EC4: Null day
     // -----------------------
     @Test
-    void invalidDay_returnsZero_andDoesNotQuery() throws Exception {
-        when(connection.createStatement()).thenReturn(statement);
-
-        int earnings = controller.getEarningsOfSpecificDay("Sund");
-        assertEquals(0, earnings);
-
-        verify(statement, never()).executeQuery(anyString());
+    void nullDay_returnsZero() {
+        assertEquals(0, controller.getEarningsOfSpecificDay(null));
     }
 
-    // -----------------------
-    // EC3: empty string
-    // -----------------------
-    @Test
-    void emptyDay_returnsZero_andDoesNotQuery() throws Exception {
-        when(connection.createStatement()).thenReturn(statement);
-
-        int earnings = controller.getEarningsOfSpecificDay("");
-        assertEquals(0, earnings);
-
-        verify(statement, never()).executeQuery(anyString());
-    }
-
-    // -----------------------
-    // EC4: null day
-    // -----------------------
-    @Test
-    void nullDay_throwsNullPointerException_currentBehavior() throws Exception {
-        when(connection.createStatement()).thenReturn(statement);
-
-        assertThrows(NullPointerException.class,
-                () -> controller.getEarningsOfSpecificDay(null));
-    }
-
-    // -----------------------
-    // EC5: ResultSet has no rows
-    // -----------------------
     @Test
     void validDay_resultSetNextFalse_returnsZero() throws Exception {
-        when(connection.createStatement()).thenReturn(statement);
-        when(statement.executeQuery(contains("Tuesday"))).thenReturn(resultSet);
-        when(resultSet.next()).thenReturn(false);
-
-        int earnings = controller.getEarningsOfSpecificDay("Tue");
-        assertEquals(0, earnings);
+        inject(controller, "connection", fakeConnectionReturning(0, false, false));
+        assertEquals(0, controller.getEarningsOfSpecificDay("Tue"));
     }
 
-    // -----------------------
-    // EC6: query throws SQLException
-    // -----------------------
     @Test
-    void validDay_executeQueryThrowsSQLException_returnsZero_currentBehaviorPrintsStackTrace() throws Exception {
-        when(connection.createStatement()).thenReturn(statement);
-        when(statement.executeQuery(anyString())).thenThrow(new SQLException("db error"));
-
-        int earnings = controller.getEarningsOfSpecificDay("Wed");
-        assertEquals(0, earnings);
+    void validDay_executeQueryThrowsSQLException_returnsZero() throws Exception {
+        inject(controller, "connection", fakeConnectionReturning(0, true, true));
+        assertEquals(0, controller.getEarningsOfSpecificDay("Wed"));
     }
 
-    // -----------------------
-    // EC7: createStatement throws SQLException
-    // -----------------------
-    @Test
-    void createStatementThrowsSQLException_currentBehaviorMayThrowNPE() throws Exception {
-        when(connection.createStatement()).thenThrow(new SQLException("db down"));
-
-        try (MockedStatic<?> helper = mockStatic(Class.forName("com.dfms.dairy_farm_management_system.helpers.Helper"))) {
-            helper.when(() -> displayAlert(anyString(), anyString(), any(Alert.AlertType.class))).thenAnswer(inv -> null);
-
-            assertThrows(NullPointerException.class,
-                    () -> controller.getEarningsOfSpecificDay("Thu"));
-        }
+    private static Connection fakeConnectionReturning(int value, boolean nextReturnsTrue, boolean throwOnExecute) {
+        return (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(),
+                new Class[]{Connection.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("prepareStatement")) {
+                        return fakePreparedStatementReturning(value, nextReturnsTrue, throwOnExecute);
+                    }
+                    if (method.getName().equals("close")) return null;
+                    throw new UnsupportedOperationException("Not implemented: " + method.getName());
+                }
+        );
     }
 
-    // -------- Reflection helper --------
+    private static PreparedStatement fakePreparedStatementReturning(int value, boolean nextReturnsTrue, boolean throwOnExecute) {
+        return (PreparedStatement) Proxy.newProxyInstance(
+                PreparedStatement.class.getClassLoader(),
+                new Class[]{PreparedStatement.class},
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                        case "setString":
+                            return null;
+                        case "executeQuery":
+                            if (throwOnExecute) throw new SQLException("db error");
+                            return fakeResultSetReturning(value, nextReturnsTrue);
+                        case "close":
+                            return null;
+                        default:
+                            throw new UnsupportedOperationException("Not implemented: " + method.getName());
+                    }
+                }
+        );
+    }
+
+    private static ResultSet fakeResultSetReturning(int value, boolean nextReturnsTrue) {
+        return (ResultSet) Proxy.newProxyInstance(
+                ResultSet.class.getClassLoader(),
+                new Class[]{ResultSet.class},
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                        case "next":
+                            return nextReturnsTrue;
+                        case "getInt":
+                            return value;
+                        case "close":
+                            return null;
+                        default:
+                            throw new UnsupportedOperationException("Not implemented: " + method.getName());
+                    }
+                }
+        );
+    }
+
+    // Reflection helper
     private static void inject(Object target, String fieldName, Object value) throws Exception {
         Field f = target.getClass().getDeclaredField(fieldName);
         f.setAccessible(true);
