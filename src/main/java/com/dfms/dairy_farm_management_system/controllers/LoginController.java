@@ -215,4 +215,15 @@ public class LoginController implements Initializable {
         return attempts >= 0 && attempts <= 5;
     }
 
+    // method created to demonstrate Statement/Branch/Condition/MC/DC coverage
+    public boolean isLoginAllowed(int attempts, boolean isAccountLocked, boolean isCaptchaVerified) {
+        if (attempts < 0) {
+            return false;
+        }
+        if (attempts <= 5 && !isAccountLocked && isCaptchaVerified) {
+            return true;
+        }
+        return false;
+    }
+
 }
