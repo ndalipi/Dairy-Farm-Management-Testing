@@ -226,4 +226,16 @@ public class Animal {
     public boolean isValidAge(int age) {
         return age >= 0 && age <= 30;
     }
+
+    // Method created to demonstrate Statement/Branch/Condition/MC/DC coverage
+    public boolean isValidAnimalRegistration(String tagId, int age, double weightKg) {
+        if (tagId == null || tagId.trim().isEmpty()) {
+            return false;
+        }
+        // Decision with multiple independent conditions
+        if (age >= 0 && age <= 30 && weightKg > 0) {
+            return true;
+        }
+        return false;
+    }
 }
