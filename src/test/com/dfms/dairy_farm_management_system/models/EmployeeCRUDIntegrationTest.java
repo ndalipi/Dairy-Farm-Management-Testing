@@ -8,13 +8,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Integration Test Suite for Employee CRUD Operations
- *
- * Comprehensive testing of save(), update(), and delete() methods
- * including transformations, constraints, and edge cases.
- */
-class EmployeeCrudIntegrationTest {
+class EmployeeCRUDIntegrationTest {
 
     private Employee employee;
     private String cin;

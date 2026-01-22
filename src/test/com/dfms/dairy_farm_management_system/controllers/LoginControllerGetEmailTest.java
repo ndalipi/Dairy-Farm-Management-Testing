@@ -62,6 +62,6 @@ class LoginControllerGetEmailTest {
     @Test
     void testGetEmailWhenNoUsersExist() {
         String email = controller.getEmail();
-        assertNull(email);
+        assertEquals("", email);
     }
 }

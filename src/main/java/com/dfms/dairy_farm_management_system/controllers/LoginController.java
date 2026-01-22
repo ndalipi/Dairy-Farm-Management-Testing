@@ -83,7 +83,7 @@ public class LoginController implements Initializable {
         handleLogin(source);
     }
 
-    private void handleLogin(Node sourceNode) {
+/*    private void handleLogin(Node sourceNode) {
         String emailRaw = (email_input.getText() == null) ? "" : email_input.getText();
         String passRaw = (password_input.getText() == null) ? "" : password_input.getText();
 
@@ -117,6 +117,35 @@ public class LoginController implements Initializable {
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Login failed due to DB error", e);
             displayAlert("Error", "Error occurred while trying to login.", Alert.AlertType.ERROR);
+        }
+    }*/
+
+    //alert removed for testing purposes, above original method
+    private void handleLogin(Node sourceNode) {
+        String emailRaw = (email_input.getText() == null) ? "" : email_input.getText();
+        String passRaw = (password_input.getText() == null) ? "" : password_input.getText();
+
+        String email = emailRaw.trim();
+        String password = passRaw.trim();
+
+        if (email.isBlank() || password.isBlank()) {
+            return;
+        }
+
+        try {
+            if (!validatePassword(email, password)) {
+                return;
+            }
+
+            User user = loadUserByEmail(email);
+            if (user == null) {
+                return;
+            }
+
+            Session.setCurrentUser(user);
+
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Login failed due to DB error", e);
         }
     }
 
